@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>책친구</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;height:100dvh;overflow:hidden;font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
+:root{--cr:#F5EFE6;--bg:#D4A96A;--br:#7B4F2E;--dk:#3E2010;--lb:#EAD8BC;--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px)}
+
+.screens{position:fixed;inset:0;height:100dvh}
+.screen{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .3s ease,transform .3s ease;transform:translateX(26px);overflow:hidden;background:var(--cr);display:flex;flex-direction:column}
+.screen.active{opacity:1;pointer-events:all;transform:translateX(0)}
+.screen.out{opacity:0;transform:translateX(-26px)}
+.cx{max-width:480px;width:100%;margin:0 auto}
+
+.ind{position:fixed;bottom:calc(var(--sab) + 12px);right:14px;font-size:11px;color:rgba(62,32,16,.3);z-index:998;font-weight:500;letter-spacing:.4px;pointer-events:none}
+.snav{position:fixed;top:50%;transform:translateY(-50%);z-index:997;display:flex;flex-direction:column;gap:6px}
+.snav.L{left:8px}.snav.R{right:8px}
+.snb{width:34px;height:34px;border-radius:50%;background:rgba(62,32,16,.1);border:1px solid rgba(62,32,16,.12);color:rgba(62,32,16,.55);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.snb:hover{background:rgba(62,32,16,.2)}
+
+.btn{width:100%;padding:17px;background:var(--bg);color:var(--dk);border:none;border-radius:16px;font-size:16px;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:.2px;transition:background .18s,transform .1s}
+.btn:hover{background:#c49858}.btn:active{transform:scale(.98)}
+.btn.ghost{background:transparent;color:var(--br);border:1.5px solid var(--lb)}
+
+.body{flex:1;overflow-y:auto;overflow-x:hidden}.body::-webkit-scrollbar{width:3px}
+.body::-webkit-scrollbar-thumb{background:var(--lb);border-radius:2px}
+
+.back{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--br);cursor:pointer;transition:background .15s;flex-shrink:0}
+.back:hover{background:var(--lb)}
+
+.egrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ecard{background:var(--lb);border-radius:18px;padding:16px;cursor:pointer;transition:transform .15s,background .15s;display:flex;flex-direction:column;justify-content:flex-end;min-height:110px}
+.ecard:hover{transform:scale(.97)}.ecard.blank{background:rgba(212,169,106,.12);border:2px dashed var(--bg)}
+.ecard.sel{background:var(--bg)}.ecard.sel .ecard-text{color:#fff}
+.ecard-icon{font-size:24px;line-height:1;margin-bottom:auto}
+.ecard-text{font-size:12.5px;font-weight:500;color:var(--dk);line-height:1.5;padding-top:8px}
+.ecard.blank .ecard-text{text-align:center}
+
+.lcard{background:#fff;border-radius:20px;padding:24px 22px;box-shadow:0 2px 20px rgba(62,32,16,.08)}
+.lmeta{font-size:11px;color:var(--br);opacity:.7;font-style:italic;margin-bottom:10px}
+.lquote{font-size:17px;font-weight:600;color:var(--dk);line-height:1.75;margin-bottom:16px}
+.ldivider{height:1px;background:var(--lb);margin-bottom:14px}
+.lcomment{font-size:13.5px;color:var(--br);line-height:1.68}
+
+.chip{display:inline-flex;align-items:center;gap:5px;background:var(--lb);color:var(--br);padding:7px 14px;border-radius:20px;font-size:13px;font-weight:500}
+
+.dots{display:flex;justify-content:center;gap:7px}
+.dot{width:6px;height:6px;border-radius:3px;background:rgba(62,32,16,.15);transition:all .3s}
+.dot.on{width:20px;background:var(--bg)}
+.dot-w{width:6px;height:6px;border-radius:3px;background:rgba(212,169,106,.3);transition:all .3s}
+.dot-w.on{width:20px;background:var(--bg)}
+
+.obwrap{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:50px 30px calc(var(--sab) + 78px);cursor:pointer}
+.obbg{position:absolute;inset:0}
+.obov{position:absolute;inset:0;background:linear-gradient(to top,rgba(8,3,1,.93) 0%,rgba(8,3,1,.12) 65%,transparent 100%)}
+.obc{position:relative;z-index:1;max-width:480px;width:100%;margin:0 auto}
+.oblabel{font-size:10.5px;color:var(--bg);opacity:.68;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:12px}
+.obtext{font-size:22px;font-weight:500;color:var(--bg);line-height:1.68;font-style:italic}
+.obtext.B{font-style:normal;font-weight:700;font-size:30px;line-height:1.3}
+.ob-hint{position:absolute;bottom:calc(var(--sab) + 30px);left:0;right:0;text-align:center;font-size:11px;color:rgba(212,169,106,.45);letter-spacing:.5px;z-index:10}
+.ob-dots-dark{position:absolute;bottom:calc(var(--sab) + 52px);left:0;right:0;display:flex;justify-content:center;gap:7px;z-index:10}
+
+/* chat */
+.chatbody{flex:1;overflow-y:auto;padding:10px 18px calc(var(--sab) + 76px);display:flex;flex-direction:column;gap:14px}
+.chatbody::-webkit-scrollbar{display:none}
+.cmsg{max-width:82%}
+.cmsg.bot{align-self:flex-start}.cmsg.user{align-self:flex-end}
+.cbubble{padding:14px 18px;border-radius:18px;font-size:14px;line-height:1.68}
+.cmsg.bot .cbubble{background:#fff;color:var(--dk);box-shadow:0 1px 8px rgba(62,32,16,.07)}
+.cmsg.user .cbubble{background:var(--bg);color:#fff}
+.ctime{font-size:10px;color:var(--br);opacity:.4;margin-top:4px;padding:0 2px}
+.cmsg.user .ctime{text-align:right}
+.cinputbar{position:absolute;bottom:0;left:0;right:0;padding:10px 18px calc(var(--sab) + 14px);background:var(--cr);border-top:1px solid var(--lb);display:flex;gap:9px;align-items:center}
+.cinput{flex:1;background:#fff;border-radius:24px;padding:12px 17px;font-size:14px;color:var(--dk);border:1.5px solid var(--lb);outline:none;font-family:inherit}
+.csend{width:42px;height:42px;background:var(--bg);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;color:#fff;flex-shrink:0}
+
+/* guide questions bubble */
+.cguide{background:rgba(212,169,106,.14);border:1px solid rgba(212,169,106,.3);border-radius:16px;padding:13px 16px;font-size:13px;color:var(--br);line-height:1.65;font-style:italic;margin-top:2px}
+
+/* archive */
+.qcard{background:#fff;border-radius:22px;padding:28px 24px;box-shadow:0 2px 18px rgba(62,32,16,.07);cursor:pointer;transition:transform .15s}
+.qcard:hover{transform:scale(.99)}
+.qmark{font-size:54px;color:var(--lb);font-family:Georgia,serif;line-height:.8;display:block;margin-bottom:10px}
+.qtext{font-size:19px;font-weight:700;color:var(--dk);line-height:1.72}
+.qmark-r{font-size:54px;color:var(--lb);font-family:Georgia,serif;line-height:0;display:block;text-align:right;margin-top:14px}
+
+/* book */
+.bookcard{background:var(--lb);border-radius:16px;padding:16px;display:flex;gap:14px;cursor:pointer;transition:background .15s}
+.bookcard:hover{background:#d4c4a4}
+.bookcov{width:50px;height:70px;background:linear-gradient(135deg,var(--br),#3d1e0a);border-radius:4px 7px 7px 4px;border-left:4px solid rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.bcover{width:100%;height:230px;background:linear-gradient(135deg,var(--br),#3d1e0a);display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative}
+
+/* settings */
+.sgroup{margin:0 18px 4px}
+.sg-t{font-size:10.5px;color:var(--br);opacity:.5;letter-spacing:1.5px;text-transform:uppercase;padding:0 4px;margin-bottom:8px}
+.si{background:#fff;padding:16px 18px;display:flex;align-items:center;cursor:pointer;margin-bottom:1px}
+.si:first-child{border-radius:14px 14px 3px 3px}.si:last-child{border-radius:3px 3px 14px 14px}.si:only-child{border-radius:14px}
+.si-txt{flex:1;font-size:15px;color:var(--dk)}
+.si-sub{font-size:12px;color:var(--br);opacity:.52;margin-top:2px}
+.tog{width:48px;height:27px;border-radius:14px;background:var(--bg);position:relative;cursor:pointer;transition:background .2s;flex-shrink:0}
+.tog.off{background:#C4B8A8}
+.tok{position:absolute;width:21px;height:21px;background:#fff;border-radius:50%;top:3px;right:3px;transition:right .2s;box-shadow:0 1px 4px rgba(0,0,0,.18)}
+.tog.off .tok{right:calc(100% - 24px)}
+
+/* modal */
+.movl{position:absolute;inset:0;background:rgba(15,6,2,.48);display:flex;align-items:flex-end;z-index:60;animation:fi .2s ease}
+.msheet{background:var(--cr);border-radius:28px 28px 0 0;padding:12px 22px calc(var(--sab) + 36px);width:100%;animation:su .3s ease;max-width:480px;margin:0 auto}
+.mhandle{width:40px;height:4px;background:var(--lb);border-radius:2px;margin:0 auto 22px}
+
+/* lock / launcher */
+.lockbg{position:absolute;inset:0;background:linear-gradient(160deg,#2C1A0A,#1A0D05);display:flex;flex-direction:column;padding:calc(var(--sat)+40px) 18px calc(var(--sab)+40px)}
+.launchbg{position:absolute;inset:0;background:linear-gradient(155deg,#2a1a0e,#150c05 55%,#0d091a);display:flex;flex-direction:column;padding:calc(var(--sat)+44px) 20px calc(var(--sab)+28px)}
+.appgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;padding:0 8px;align-content:start;flex:1}
+.aiw{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer}
+.aib{width:60px;height:60px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px}
+.aib.main{background:linear-gradient(135deg,#D4A96A,#9E6E38);box-shadow:0 4px 18px rgba(212,169,106,.28)}
+.ail{font-size:10px;color:rgba(255,255,255,.78);text-align:center}
+.ldock{background:rgba(255,255,255,.1);backdrop-filter:blur(14px);border-radius:24px;padding:14px 20px;display:flex;justify-content:space-around;margin-top:auto;max-width:400px;width:100%;align-self:center}
+
+.etag{display:inline-flex;padding:7px 14px;background:var(--lb);border-radius:20px;font-size:13px;color:var(--br);cursor:pointer;transition:background .15s,color .15s}
+.etag.on{background:var(--bg);color:#fff}
+
+/* ══ 보관함 칩 스크롤 ══ */
+.archips-wrap{position:relative;flex-shrink:0;padding:4px 0 10px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.archips-wrap::-webkit-scrollbar{display:none}
+.archips-wrap::after{content:'';position:absolute;right:0;top:0;bottom:0;width:36px;background:linear-gradient(to right,transparent,var(--cr));pointer-events:none}
+.archips{display:flex;gap:8px;padding:0 18px;white-space:nowrap}
+
+/* ══ NAV MENU ══ */
+.nmitem{display:flex;align-items:center;gap:14px;padding:13px 22px;cursor:pointer;transition:background .15s}
+.nmitem:hover{background:var(--lb)}
+
+/* ══ BOTTOM NAV ══ */
+.bnav{position:absolute;bottom:0;left:0;right:0;background:var(--cr);border-top:1px solid var(--lb);z-index:50}
+.bnav-row{display:flex;max-width:480px;margin:0 auto;padding:10px 8px calc(var(--sab) + 10px)}
+.bni{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:4px 0;border-radius:12px;transition:background .15s}
+.bni:hover{background:rgba(212,169,106,.12)}
+.bni-ic{font-size:22px;line-height:1.2}
+.bni-lb{font-size:10px;color:rgba(62,32,16,.38);font-weight:500}
+.bni.on .bni-lb{color:var(--bg);font-weight:700}
+
+.ldot{width:9px;height:9px;border-radius:50%;background:var(--bg);animation:ldotPulse 1.3s ease-in-out infinite}
+@keyframes ldotPulse{0%,100%{opacity:.2;transform:scale(.75)}50%{opacity:1;transform:scale(1.1)}}
+@keyframes fi{from{opacity:0}to{opacity:1}}
+@keyframes su{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideInL{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+</style>
+</head>
+<body>
+<div class="screens" id="screens">
+
+<!-- ═══ S1 · SPLASH ═══ -->
+<div class="screen active" id="s1" onclick="goTo(2)" style="background:var(--cr);align-items:center;justify-content:center;gap:18px;cursor:pointer">
+  <svg style="animation:fadeInUp .9s ease both" width="88" height="88" viewBox="0 0 88 88" fill="none">
+    <rect x="9" y="14" width="54" height="64" rx="6" fill="#D4A96A"/>
+    <rect x="7" y="14" width="8" height="64" rx="3" fill="#7B4F2E"/>
+    <circle cx="36" cy="42" r="16" fill="#F5EFE6"/>
+    <circle cx="30" cy="40" r="3" fill="#3E2010"/><circle cx="42" cy="40" r="3" fill="#3E2010"/>
+    <circle cx="31" cy="39" r="1" fill="#F5EFE6"/><circle cx="43" cy="39" r="1" fill="#F5EFE6"/>
+    <path d="M30 48 Q36 54 42 48" stroke="#3E2010" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+    <rect x="27" y="61" width="18" height="2" rx="1" fill="#EAD8BC"/>
+    <rect x="27" y="65" width="13" height="2" rx="1" fill="#EAD8BC"/>
+  </svg>
+  <div style="font-size:34px;font-weight:600;color:var(--dk);letter-spacing:5px;animation:fadeInUp .9s .25s ease both;text-align:center">책친구</div>
+  <div style="font-size:13px;color:var(--br);opacity:.58;animation:fadeInUp .9s .5s ease both;letter-spacing:1px;text-align:center">오늘의 감정에 맞는 한 줄의 책</div>
+  <div style="position:absolute;bottom:calc(var(--sab) + 26px);font-size:11px;color:rgba(62,32,16,.35);letter-spacing:.5px">탭하거나 스와이프로 계속 →</div>
+</div>
+
+<!-- ═══ S2 · OB1 campfire ═══ -->
+<div class="screen" id="s2" style="background:#190904">
+  <div class="obwrap" onclick="goTo(3)">
+    <div class="obbg" style="background:linear-gradient(160deg,#8B3A10,#C05518 28%,#E07C1C 52%,#280F06 100%)"></div>
+    <div class="obov"></div>
+    <div class="obc">
+      <div class="oblabel">책친구 · Book Friend</div>
+      <div class="obtext">"오늘의 나에게, 책친구가<br>한 마디 답을 보낸다."</div>
+    </div>
+  </div>
+  <div class="ob-dots-dark"><div class="dot-w on"></div><div class="dot-w"></div><div class="dot-w"></div><div class="dot-w"></div></div>
+  <div class="ob-hint">탭하거나 스와이프로 계속 →</div>
+</div>
+
+<!-- ═══ S3 · OB2 soil ═══ -->
+<div class="screen" id="s3" style="background:#100704">
+  <div class="obwrap" onclick="goTo(4)">
+    <div class="obbg" style="background:linear-gradient(180deg,#2A1406,#4E2E1A 35%,#876040 65%,#1C0D05 100%)"></div>
+    <div class="obov"></div>
+    <div class="obc">
+      <div class="oblabel">Book Friend · 책친구</div>
+      <div class="obtext">"오늘도, 딱히 둘 곳이 없는<br>감정들을 그냥 묻었다."</div>
+    </div>
+  </div>
+  <div class="ob-dots-dark"><div class="dot-w"></div><div class="dot-w on"></div><div class="dot-w"></div><div class="dot-w"></div></div>
+  <div class="ob-hint">탭하거나 스와이프로 계속 →</div>
+</div>
+
+<!-- ═══ S4 · OB3 door ═══ -->
+<div class="screen" id="s4" style="background:#070302">
+  <div class="obwrap" onclick="goTo(5)">
+    <div class="obbg" style="background:linear-gradient(180deg,#110602,#371908 42%,#542A14 70%,#110602 100%)"></div>
+    <div class="obov" style="background:linear-gradient(to top,rgba(5,2,1,.95) 0%,rgba(5,2,1,.08) 65%,transparent 100%)"></div>
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-58%);width:96px;height:168px;border:2px solid rgba(212,169,106,.2);border-radius:48px 48px 3px 3px"></div>
+    <div style="position:absolute;top:50%;left:50%;transform:translate(14px,-100%);width:7px;height:7px;background:rgba(212,169,106,.45);border-radius:50%"></div>
+    <div class="obc">
+      <div class="oblabel">Book Friend · 책친구</div>
+      <div class="obtext B">책이<br>먼저 찾아온다.</div>
+    </div>
+  </div>
+  <div class="ob-dots-dark"><div class="dot-w"></div><div class="dot-w"></div><div class="dot-w on"></div><div class="dot-w"></div></div>
+  <div class="ob-hint">탭하거나 스와이프로 계속 →</div>
+</div>
+
+<!-- ═══ S5 · OB4 emotion preview ═══ -->
+<div class="screen" id="s5" onclick="goTo(6)" style="cursor:pointer">
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+22px) 20px 14px">
+    <div style="font-size:25px;font-weight:700;color:var(--dk);line-height:1.38">오늘 기분을<br>하나 골라봐.</div>
+  </div>
+  <div class="body cx" style="padding:4px 20px;pointer-events:none;opacity:.82">
+    <div class="egrid">
+      <div class="ecard"><div class="ecard-icon">🐣</div><div class="ecard-text">뭔가 찜찜하게<br>끝난 것 같은</div></div>
+      <div class="ecard"><div class="ecard-icon">🫣</div><div class="ecard-text">아무 일도 없었는데<br>괜히 지친</div></div>
+      <div class="ecard"><div class="ecard-icon">💬</div><div class="ecard-text">누군가한테 말하고<br>싶은데 꺼내기 애매한</div></div>
+      <div class="ecard"><div class="ecard-icon">😪</div><div class="ecard-text">그냥 빨리<br>자고 싶은</div></div>
+      <div class="ecard"><div class="ecard-icon">🔥</div><div class="ecard-text">뭔가 잘 되고<br>싶은</div></div>
+      <div class="ecard blank"><div class="ecard-icon" style="text-align:center">✏️</div><div class="ecard-text">직접 입력하기</div></div>
+    </div>
+  </div>
+  <div class="cx" style="flex-shrink:0;padding:12px 20px calc(var(--sab)+24px)">
+    <div class="dots" style="margin-bottom:14px"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot on"></div><div class="dot"></div><div class="dot"></div></div>
+    <div style="text-align:center;font-size:12px;color:var(--br);opacity:.4">탭해서 계속</div>
+  </div>
+</div>
+
+<!-- ═══ S6 · OB5 letter preview + 시작하기 ═══ -->
+<div class="screen" id="s6">
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+22px) 20px 16px">
+    <div style="font-size:11px;color:var(--bg);letter-spacing:2.5px;margin-bottom:10px">STEP 02</div>
+    <div style="font-size:25px;font-weight:700;color:var(--dk);line-height:1.38">책친구가<br>편지를 보내줄게.</div>
+    <div style="font-size:13px;color:var(--br);margin-top:8px;opacity:.65;line-height:1.62">감정에 맞는 책의 한 줄이 따뜻하게 도착해.</div>
+  </div>
+  <div class="body cx" style="padding:4px 20px">
+    <div class="lcard">
+      <div class="lmeta">『아몬드』— 손원평</div>
+      <div class="lquote">"세상은 나 없이도 잘 돌아갔고, 나는 그 틈에서 조용히 숨을 쉬고 있었다."</div>
+      <div class="ldivider"></div>
+      <div class="lcomment">오늘 묻어뒀던 그 감정, 이 한 줄이 꺼내줄 수 있을 거야. 혼자가 아니야. 🤍</div>
+    </div>
+  </div>
+  <div class="cx" style="flex-shrink:0;padding:14px 20px calc(var(--sab)+32px)">
+    <div class="dots" style="margin-bottom:14px"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot on"></div></div>
+    <button class="btn" onclick="goTo(7)">시작하기</button>
+  </div>
+</div>
+
+<!-- ═══ S7 · HOME 감정 선택 ═══ -->
+<div class="screen" id="s7">
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+16px) 20px 0">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">
+      <div style="font-size:22px;font-weight:700;color:var(--dk);line-height:1.32">오늘 기분을 하나 골라봐.</div>
+      <div style="font-size:11px;color:var(--br);opacity:.48;white-space:nowrap;flex-shrink:0">5월 12일 화</div>
+    </div>
+    <div style="font-size:13px;color:var(--br);opacity:.52;line-height:1.5;padding-bottom:14px">기분에 딱 맞는 책 한 줄을 보내줄게.</div>
+  </div>
+  <div style="flex:1;overflow:hidden;padding:0 20px">
+    <div class="egrid" id="s7g" style="height:calc(100% - calc(var(--sab) + 96px));margin-top:8px;max-width:480px;margin-left:auto;margin-right:auto;grid-template-rows:repeat(3,1fr)">
+      <div class="ecard" onclick="pickCard(this)"><div class="ecard-icon">🐣</div><div class="ecard-text">뭔가 찜찜하게<br>끝난 것 같은</div></div>
+      <div class="ecard" onclick="pickCard(this)"><div class="ecard-icon">🫣</div><div class="ecard-text">아무 일도 없었는데<br>괜히 지친</div></div>
+      <div class="ecard" onclick="pickCard(this)"><div class="ecard-icon">💬</div><div class="ecard-text">누군가한테 말하고<br>싶은데 꺼내기 애매한</div></div>
+      <div class="ecard" onclick="pickCard(this)"><div class="ecard-icon">😪</div><div class="ecard-text">그냥 빨리<br>자고 싶은</div></div>
+      <div class="ecard" onclick="pickCard(this)"><div class="ecard-icon">🔥</div><div class="ecard-text">뭔가 잘 되고<br>싶은</div></div>
+      <div class="ecard blank" onclick="pickCard(this)"><div class="ecard-icon" style="text-align:center;width:100%">✏️</div><div class="ecard-text">직접 입력하기</div></div>
+    </div>
+  </div>
+  <!-- BOTTOM NAV · 홈 active -->
+  <div class="bnav">
+    <div class="bnav-row">
+      <div class="bni on" onclick="goTo(7)"><div class="bni-ic">🏠</div><div class="bni-lb">홈</div></div>
+      <div class="bni" onclick="goTo(12)"><div class="bni-ic">💌</div><div class="bni-lb">보관함</div></div>
+      <div class="bni" onclick="goTo(18)"><div class="bni-ic">⚙️</div><div class="bni-lb">설정</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S8 · HOME 오늘의 편지 ═══ -->
+<div class="screen" id="s8">
+  <!-- 헤더 영역 -->
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+10px) 20px 0">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <div onclick="toggleMenu()" style="display:flex;flex-direction:column;gap:5px;cursor:pointer;padding:3px 2px;flex-shrink:0">
+        <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+        <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+        <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      </div>
+      <div style="font-size:11.5px;color:var(--br);opacity:.5;flex:1">2026년 5월 12일 · 오후 9:12</div>
+      <div class="chip">🐣 찜찜</div>
+    </div>
+    <div style="font-size:26px;font-weight:700;color:var(--dk);margin-bottom:6px">오늘의 편지 📬</div>
+    <div style="font-size:13px;color:var(--br);opacity:.55;margin-bottom:18px;line-height:1.6">오늘 기분에 딱 맞는 한 줄이 도착했어.</div>
+    <div style="height:1px;background:var(--lb);margin-bottom:0"></div>
+  </div>
+  <!-- 편지 카드 + 버튼 -->
+  <div class="body cx" style="padding:20px 20px calc(var(--sab)+80px)">
+    <div class="lcard" style="margin-bottom:18px">
+      <div class="lmeta">『아몬드』— 손원평 · 창비 2017</div>
+      <div class="lquote">"세상은 나 없이도 잘 돌아갔고, 나는 그 틈에서 조용히 숨을 쉬고 있었다."</div>
+      <div class="ldivider"></div>
+      <div class="lcomment">뭔가 찜찜하게 끝났다고 했지. 제대로 마무리 못 한 것 같은 날일수록, 조용히 숨만 쉬어도 충분해. 🤍</div>
+    </div>
+    <!-- 액션 버튼들 -->
+    <button class="btn" onclick="goTo(9)" style="margin-bottom:10px">💬 책친구와 대화하기</button>
+    <div style="display:flex;gap:10px">
+      <div onclick="goTo(15)" style="flex:1;background:var(--lb);border-radius:14px;padding:13px;text-align:center;cursor:pointer;font-size:13px;color:var(--br);font-weight:500;transition:background .15s" onmouseover="this.style.background='#d4c4a4'" onmouseout="this.style.background='var(--lb)'">📖 책 자세히 보기</div>
+      <div onclick="goTo(12)" style="flex:1;background:var(--lb);border-radius:14px;padding:13px;text-align:center;cursor:pointer;font-size:13px;color:var(--br);font-weight:500;transition:background .15s" onmouseover="this.style.background='#d4c4a4'" onmouseout="this.style.background='var(--lb)'">📁 보관함 보기</div>
+    </div>
+  </div>
+  <!-- BOTTOM NAV · 홈 active -->
+  <div class="bnav">
+    <div class="bnav-row">
+      <div class="bni on" onclick="goTo(8)"><div class="bni-ic">🏠</div><div class="bni-lb">홈</div></div>
+      <div class="bni" onclick="goTo(12)"><div class="bni-ic">💌</div><div class="bni-lb">보관함</div></div>
+      <div class="bni" onclick="goTo(18)"><div class="bni-ic">⚙️</div><div class="bni-lb">설정</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S9 · CHATBOT 시작 ═══ -->
+<div class="screen" id="s9">
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+12px) 18px 13px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--lb)">
+    <div class="back" onclick="goTo(8)">←</div>
+    <div style="width:36px;height:36px;background:var(--bg);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📖</div>
+    <div style="flex:1">
+      <div style="font-size:15px;font-weight:600;color:var(--dk)">책친구</div>
+      <div style="font-size:11px;color:var(--br);opacity:.58">비밀 대화 · 🔒</div>
+    </div>
+    <div class="chip" style="font-size:11px;padding:5px 10px">🐣 찜찜</div>
+  </div>
+  <div class="chatbody cx">
+    <div style="text-align:center;font-size:11px;color:var(--br);opacity:.38;padding:6px 0">오늘 오후 9:12</div>
+    <!-- 오늘의 인용구 카드 -->
+    <div class="cmsg bot">
+      <div class="cbubble" style="background:var(--lb)">
+        <div style="font-size:10px;color:var(--br);opacity:.68;margin-bottom:7px;font-style:italic">오늘 책친구가 고른 한 줄 · 『아몬드』— 손원평</div>
+        <div style="font-weight:600;color:var(--dk);font-size:15px;line-height:1.7">"세상은 나 없이도 잘 돌아갔고,<br>나는 그 틈에서 조용히 숨을 쉬고 있었다."</div>
+      </div>
+      <div class="ctime">오후 9:12</div>
+    </div>
+    <!-- 책친구 첫 말 -->
+    <div class="cmsg bot">
+      <div class="cbubble">야, 왔어. 반가워. 🤍<br><br>오늘 뭔가 찜찜하게 끝난 것 같다고 했잖아. 그 느낌, 어디서 온 것 같아?</div>
+      <div class="ctime">오후 9:12</div>
+    </div>
+    <!-- 유도 질문 힌트 -->
+    <div class="cx" style="padding:0"><div class="cguide">💡 오늘 유독 머릿속에 남는 장면이 있어?</div></div>
+  </div>
+  <div class="cinputbar cx">
+    <input class="cinput" type="text" placeholder="솔직하게 말해봐..." readonly onclick="goTo(10)">
+    <div class="csend" onclick="goTo(10)">↑</div>
+  </div>
+</div>
+
+<!-- ═══ S10 · CHATBOT 대화 중 ═══ -->
+<div class="screen" id="s10">
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+12px) 18px 13px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--lb)">
+    <div class="back" onclick="goTo(9)">←</div>
+    <div style="width:36px;height:36px;background:var(--bg);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📖</div>
+    <div><div style="font-size:15px;font-weight:600;color:var(--dk)">책친구</div><div style="font-size:11px;color:var(--br);opacity:.58">대화 중 · 🟢</div></div>
+  </div>
+  <div class="chatbody cx">
+    <div style="text-align:center;font-size:11px;color:var(--br);opacity:.38;padding:6px 0">오늘 오후 9:12</div>
+    <div class="cmsg bot">
+      <div class="cbubble">야, 왔어. 반가워. 🤍<br><br>오늘 뭔가 찜찜하게 끝난 것 같다고 했잖아. 그 느낌, 어디서 온 것 같아?</div>
+      <div class="ctime">오후 9:12</div>
+    </div>
+    <div class="cmsg user">
+      <div class="cbubble">회의에서 말하고 싶었는데 타이밍을 놓쳤어. 별거 아닌데 계속 생각나.</div>
+      <div class="ctime">오후 9:14</div>
+    </div>
+    <div class="cmsg bot">
+      <div class="cbubble">그 말, 어떤 내용이었어?<br>지금 여기서 한 번 꺼내봐도 돼. 여기는 아무도 안 봐. 😌</div>
+      <div class="ctime">오후 9:15</div>
+    </div>
+    <div class="cmsg user">
+      <div class="cbubble">그냥 내 아이디어가 있었는데... 다들 빠르게 넘어가버렸어.</div>
+      <div class="ctime">오후 9:16</div>
+    </div>
+    <div class="cmsg bot">
+      <div class="cbubble">그 아이디어, 지금 생각해도 괜찮은 것 같아?<br>아니면 지나고 보니까 또 달라 보여?</div>
+      <div class="ctime">오후 9:17</div>
+    </div>
+    <div class="cx" style="padding:0"><div class="cguide">💡 그 아이디어가 지금도 살아 있다면, 그게 더 중요한 신호일 수 있어.</div></div>
+  </div>
+  <div class="cinputbar cx">
+    <input class="cinput" type="text" placeholder="계속 이야기해봐..." readonly onclick="goTo(11)">
+    <div class="csend" onclick="goTo(11)">↑</div>
+  </div>
+</div>
+
+<!-- ═══ S11 · CHATBOT 마무리 ═══ -->
+<div class="screen" id="s11">
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+12px) 18px 13px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--lb)">
+    <div class="back" onclick="goTo(10)">←</div>
+    <div style="width:36px;height:36px;background:var(--bg);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📖</div>
+    <div><div style="font-size:15px;font-weight:600;color:var(--dk)">책친구</div><div style="font-size:11px;color:var(--br);opacity:.58">대화 마무리</div></div>
+  </div>
+  <div class="chatbody cx">
+    <div class="cmsg bot">
+      <div class="cbubble">그 아이디어, 지금 생각해도 괜찮은 것 같아?<br>아니면 지나고 보니까 또 달라 보여?</div>
+      <div class="ctime">오후 9:17</div>
+    </div>
+    <div class="cmsg user">
+      <div class="cbubble">아직도 좋은 것 같아. 그냥 말 못 한 게 아쉬워.</div>
+      <div class="ctime">오후 9:18</div>
+    </div>
+    <div class="cmsg bot">
+      <div class="cbubble">그 아쉬움이 남는다는 건, 그 아이디어가 진짜라는 거야. 죽은 생각은 아쉽지 않거든.<br><br>다음에 비슷한 순간이 오면, 딱 한 가지만 다르게 해본다면 뭘 해볼 것 같아?</div>
+      <div class="ctime">오후 9:18</div>
+    </div>
+    <div class="cmsg user">
+      <div class="cbubble">그냥... 일단 말해버릴 것 같아.</div>
+      <div class="ctime">오후 9:19</div>
+    </div>
+    <div class="cmsg bot">
+      <div class="cbubble">좋아. 그 결심이 오늘 찜찜함의 가치야.<br><br>오늘 하루 잘 버텼어. 잘 자. 🌙</div>
+      <div class="ctime">오후 9:19</div>
+    </div>
+    <!-- 저장 카드 -->
+    <div style="background:var(--lb);border-radius:16px;padding:16px;margin-top:4px;cursor:pointer" onclick="goTo(12)">
+      <div style="font-size:11px;color:var(--br);opacity:.65;margin-bottom:7px">📁 보관함에 저장됨</div>
+      <div style="font-size:13.5px;color:var(--dk);line-height:1.65;font-weight:500">"세상은 나 없이도 잘 돌아갔고, 나는 그 틈에서 조용히 숨을 쉬고 있었다."</div>
+      <div style="font-size:11px;color:var(--br);opacity:.58;margin-top:6px">『아몬드』— 손원평 · 보관함에서 보기 →</div>
+    </div>
+  </div>
+  <div class="cx" style="flex-shrink:0;padding:14px 18px calc(var(--sab)+28px)">
+    <button class="btn ghost" onclick="goTo(8)">홈으로 돌아가기</button>
+  </div>
+</div>
+
+<!-- ═══ S12 · ARCHIVE 보관된 편지 #1 ═══ -->
+<div class="screen" id="s12">
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+12px) 18px 10px;display:flex;align-items:center">
+    <div onclick="toggleMenu()" style="display:flex;flex-direction:column;gap:5px;cursor:pointer;padding:3px 2px;flex-shrink:0">
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+    </div>
+  </div>
+  <!-- 6개 감정 키워드 칩 -->
+  <div class="archips-wrap">
+    <div class="archips">
+      <div class="chip" style="background:var(--bg);color:#fff;cursor:pointer;flex-shrink:0" onclick="goTo(12)">🐣 찜찜</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(13)">🫣 지침</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(14)">💬 꺼내기 애매</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(24)">😪 자고 싶은</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(25)">🔥 잘 되고 싶은</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(26)">✏️ 직접 입력</div>
+    </div>
+  </div>
+  <div class="body cx" style="padding:0 18px calc(var(--sab) + 90px)">
+    <div class="qcard" style="margin-bottom:14px" onclick="goTo(14)">
+      <span class="qmark">"</span>
+      <div class="qtext">세상은 나 없이도 잘 돌아갔고, 나는 그 틈에서 조용히 숨을 쉬고 있었다.</div>
+      <span class="qmark-r">"</span>
+    </div>
+    <div class="bookcard" style="margin-bottom:14px" onclick="goTo(15)">
+      <div class="bookcov">📖</div>
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--dk);margin-bottom:3px">아몬드</div>
+        <div style="font-size:13px;color:var(--br);margin-bottom:2px">손원평 지음</div>
+        <div style="font-size:11.5px;color:var(--br);opacity:.6;margin-bottom:10px">창비 · 2017</div>
+        <div style="font-size:12px;color:var(--bg);font-weight:500">책 자세히 보기 →</div>
+      </div>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:18px;margin-bottom:16px;border-left:3px solid var(--bg)">
+      <div style="font-size:11px;color:var(--bg);font-weight:600;margin-bottom:8px">📖 책친구의 한 마디</div>
+      <div style="font-size:14px;color:var(--dk);line-height:1.72">뭔가 찜찜하게 끝났다고 했지. 그런 날일수록 조용히 숨만 쉬어도 괜찮아. 오늘 하루도 잘 버텼어. 🤍</div>
+    </div>
+    <div style="background:var(--lb);border-radius:14px;padding:14px;cursor:pointer" onclick="goTo(9)">
+      <div style="font-size:11px;color:var(--br);opacity:.65;margin-bottom:6px">💬 그날 나눈 대화 요약</div>
+      <div style="font-size:13px;color:var(--dk);line-height:1.65">"그냥 일단 말해버릴 것 같아." — 대화에서 내가 한 말</div>
+      <div style="font-size:11px;color:var(--bg);margin-top:6px;font-weight:500">대화 다시 보기 →</div>
+    </div>
+    <div style="text-align:center;font-size:12px;color:var(--br);opacity:.4;margin-top:16px">2026년 5월 12일 오후 9:12에 받음</div>
+  </div>
+  <!-- BOTTOM NAV · 보관함 active -->
+  <div class="bnav">
+    <div class="bnav-row">
+      <div class="bni" onclick="goTo(8)"><div class="bni-ic">🏠</div><div class="bni-lb">홈</div></div>
+      <div class="bni on" onclick="goTo(12)"><div class="bni-ic">💌</div><div class="bni-lb">보관함</div></div>
+      <div class="bni" onclick="goTo(18)"><div class="bni-ic">⚙️</div><div class="bni-lb">설정</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S13 · ARCHIVE 보관된 편지 #2 ═══ -->
+<div class="screen" id="s13">
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+12px) 18px 10px;display:flex;align-items:center">
+    <div onclick="toggleMenu()" style="display:flex;flex-direction:column;gap:5px;cursor:pointer;padding:3px 2px;flex-shrink:0">
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+    </div>
+  </div>
+  <!-- 6개 감정 키워드 칩 -->
+  <div class="archips-wrap">
+    <div class="archips">
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(12)">🐣 찜찜</div>
+      <div class="chip" style="background:var(--bg);color:#fff;cursor:pointer;flex-shrink:0" onclick="goTo(13)">🫣 지침</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(14)">💬 꺼내기 애매</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(24)">😪 자고 싶은</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(25)">🔥 잘 되고 싶은</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(26)">✏️ 직접 입력</div>
+    </div>
+  </div>
+  <div class="body cx" style="padding:0 18px calc(var(--sab) + 90px)">
+    <div class="qcard" style="margin-bottom:14px" onclick="goTo(14)">
+      <span class="qmark">"</span>
+      <div class="qtext">아무것도 하지 않는 것이 가장 어려운 일이었다.</div>
+      <span class="qmark-r">"</span>
+    </div>
+    <div class="bookcard" style="margin-bottom:14px" onclick="goTo(15)">
+      <div class="bookcov">📖</div>
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--dk);margin-bottom:3px">채식주의자</div>
+        <div style="font-size:13px;color:var(--br);margin-bottom:2px">한강 지음</div>
+        <div style="font-size:11.5px;color:var(--br);opacity:.6;margin-bottom:10px">창비 · 2007</div>
+        <div style="font-size:12px;color:var(--bg);font-weight:500">책 자세히 보기 →</div>
+      </div>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:18px;margin-bottom:16px;border-left:3px solid var(--bg)">
+      <div style="font-size:11px;color:var(--bg);font-weight:600;margin-bottom:8px">📖 책친구의 한 마디</div>
+      <div style="font-size:14px;color:var(--dk);line-height:1.72">아무 일도 없었는데 지쳤다는 건, 사실 많은 걸 감당했다는 거야. 쉬어도 괜찮아. 🤍</div>
+    </div>
+    <div style="text-align:center;font-size:12px;color:var(--br);opacity:.4">2026년 5월 10일 오후 9:08에 받음</div>
+  </div>
+  <!-- BOTTOM NAV · 보관함 active -->
+  <div class="bnav">
+    <div class="bnav-row">
+      <div class="bni" onclick="goTo(8)"><div class="bni-ic">🏠</div><div class="bni-lb">홈</div></div>
+      <div class="bni on" onclick="goTo(12)"><div class="bni-ic">💌</div><div class="bni-lb">보관함</div></div>
+      <div class="bni" onclick="goTo(18)"><div class="bni-ic">⚙️</div><div class="bni-lb">설정</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S14 · ARCHIVE 보관된 편지 상세 ═══ -->
+<div class="screen" id="s14">
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+12px) 18px 10px;display:flex;align-items:center">
+    <div onclick="toggleMenu()" style="display:flex;flex-direction:column;gap:5px;cursor:pointer;padding:3px 2px;flex-shrink:0">
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+    </div>
+  </div>
+  <!-- 6개 감정 키워드 칩 -->
+  <div class="archips-wrap">
+    <div class="archips">
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(12)">🐣 찜찜</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(13)">🫣 지침</div>
+      <div class="chip" style="background:var(--bg);color:#fff;cursor:pointer;flex-shrink:0" onclick="goTo(14)">💬 꺼내기 애매</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(24)">😪 자고 싶은</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(25)">🔥 잘 되고 싶은</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(26)">✏️ 직접 입력</div>
+    </div>
+  </div>
+  <div class="body cx" style="padding:0 18px calc(var(--sab) + 90px)">
+    <div class="qcard" style="margin-bottom:14px">
+      <span class="qmark">"</span>
+      <div class="qtext" style="font-size:21px">우리는 말하지 않은 것들로 가득 찬 사람들이다.</div>
+      <span class="qmark-r">"</span>
+    </div>
+    <div class="bookcard" style="margin-bottom:14px" onclick="goTo(15)">
+      <div class="bookcov">📖</div>
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--dk);margin-bottom:3px">82년생 김지영</div>
+        <div style="font-size:13px;color:var(--br);margin-bottom:2px">조남주 지음</div>
+        <div style="font-size:11.5px;color:var(--br);opacity:.6;margin-bottom:10px">민음사 · 2016</div>
+        <div style="font-size:12px;color:var(--bg);font-weight:500">책 자세히 보기 →</div>
+      </div>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:18px;margin-bottom:14px;border-left:3px solid var(--bg)">
+      <div style="font-size:11px;color:var(--bg);font-weight:600;margin-bottom:8px">📖 책친구의 한 마디</div>
+      <div style="font-size:14px;color:var(--dk);line-height:1.72">말하고 싶은데 꺼내기 애매한 감정이 있어. 그게 지금 너한테 쌓여 있는 거잖아. 여기선 꺼내도 돼. 🤍</div>
+    </div>
+    <div style="background:var(--lb);border-radius:14px;padding:16px;margin-bottom:16px">
+      <div style="font-size:11px;color:var(--br);opacity:.65;margin-bottom:8px">💬 그날 나눈 대화</div>
+      <div style="font-size:13px;color:var(--dk);line-height:1.72">"회사에서 말하고 싶었는데 또 참았어."</div>
+      <div style="font-size:13px;color:var(--br);line-height:1.72;margin-top:6px">"그 감정, 여기선 꺼내도 돼. 지금 어떤 기분이야?"</div>
+    </div>
+    <div style="text-align:center;font-size:12px;color:var(--br);opacity:.4">2026년 5월 9일 오후 10:02에 받음</div>
+  </div>
+  <!-- BOTTOM NAV · 보관함 active -->
+  <div class="bnav">
+    <div class="bnav-row">
+      <div class="bni" onclick="goTo(8)"><div class="bni-ic">🏠</div><div class="bni-lb">홈</div></div>
+      <div class="bni on" onclick="goTo(12)"><div class="bni-ic">💌</div><div class="bni-lb">보관함</div></div>
+      <div class="bni" onclick="goTo(18)"><div class="bni-ic">⚙️</div><div class="bni-lb">설정</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S15 · BOOK 기본 ═══ -->
+<div class="screen" id="s15">
+  <div class="body cx" style="padding-bottom:100px">
+    <div class="bcover">
+      <div style="position:absolute;top:calc(var(--sat)+14px);left:18px;z-index:10">
+        <div class="back" onclick="goTo(8)" style="background:rgba(255,255,255,.15);backdrop-filter:blur(8px)">←</div>
+      </div>
+      <div style="width:112px;height:160px;background:rgba(255,255,255,.1);border-radius:4px 8px 8px 4px;border-left:5px solid rgba(255,255,255,.16);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+        <div style="font-size:30px">📖</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.8);text-align:center;padding:0 8px">아몬드</div>
+      </div>
+    </div>
+    <div style="padding:22px 20px 0">
+      <div style="font-size:24px;font-weight:700;color:var(--dk);margin-bottom:5px">아몬드</div>
+      <div style="font-size:14px;color:var(--br);margin-bottom:3px">손원평 지음</div>
+      <div style="font-size:12px;color:var(--br);opacity:.55;margin-bottom:18px">창비 · 2017</div>
+      <div style="height:1px;background:var(--lb);margin-bottom:18px"></div>
+      <div style="font-size:14px;color:var(--dk);line-height:1.85;opacity:.85">감정을 느끼지 못하는 소년 윤재가 세상과 부딪히며 조금씩 변해가는 이야기. 편도체에 이상이 있어 공포와 기쁨 같은 감정을 느끼지 못하는 주인공이 자신만의 방식으로 세상을 이해해 나가는 성장 소설이다.<br><br>2017년 출간 이후 꾸준히 사랑받는 스테디셀러로, 20여 개국에 번역 출간되었다.</div>
+      <div style="margin-top:20px;background:var(--lb);border-radius:12px;padding:14px;font-size:13px;color:var(--dk);line-height:1.72;font-style:italic">"세상에는 두 종류의 사람이 있다. 두려운 사람과 두렵지 않은 사람."</div>
+      <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--bg);cursor:pointer;opacity:.7" onclick="goTo(16)">독자 리뷰 보기 →</div>
+    </div>
+  </div>
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:14px 20px calc(var(--sab)+24px);background:linear-gradient(to top,var(--cr) 80%,transparent)">
+    <div class="cx"><button class="btn" onclick="goTo(17)">읽으러 가기</button></div>
+  </div>
+</div>
+
+<!-- ═══ S16 · BOOK 스크롤 (리뷰) ═══ -->
+<div class="screen" id="s16">
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+12px) 18px 13px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--lb)">
+    <div class="back" onclick="goTo(15)">←</div>
+    <div style="font-size:17px;font-weight:600;color:var(--dk)">아몬드</div>
+    <div style="font-size:13px;color:var(--br);opacity:.55">— 손원평</div>
+  </div>
+  <div class="body cx" style="padding:16px 20px calc(var(--sab)+90px)">
+    <div style="display:flex;align-items:center;gap:5px;margin-bottom:18px">
+      <span style="font-size:15px">⭐⭐⭐⭐⭐</span>
+      <span style="font-size:14px;font-weight:600;color:var(--dk)">4.8</span>
+      <span style="font-size:12px;color:var(--br);opacity:.55">(2,184명)</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+      <span style="padding:6px 12px;background:var(--lb);border-radius:20px;font-size:12px;color:var(--br)">성장소설</span>
+      <span style="padding:6px 12px;background:var(--lb);border-radius:20px;font-size:12px;color:var(--br)">감동</span>
+      <span style="padding:6px 12px;background:var(--lb);border-radius:20px;font-size:12px;color:var(--br)">베스트셀러</span>
+      <span style="padding:6px 12px;background:var(--lb);border-radius:20px;font-size:12px;color:var(--br)">한국소설</span>
+    </div>
+    <div style="height:1px;background:var(--lb);margin-bottom:18px"></div>
+    <div style="font-size:14px;font-weight:600;color:var(--dk);margin-bottom:12px">독자 리뷰</div>
+    <div style="background:#fff;border-radius:14px;padding:15px;margin-bottom:10px">
+      <div style="font-size:13px;margin-bottom:5px">⭐⭐⭐⭐⭐</div>
+      <div style="font-size:13px;color:var(--dk);line-height:1.65;margin-bottom:7px">"이 책을 읽고 나서 감정이 얼마나 소중한지 알게 됐어요."</div>
+      <div style="font-size:11px;color:var(--br);opacity:.48">지은* · 2025년 12월</div>
+    </div>
+    <div style="background:#fff;border-radius:14px;padding:15px;margin-bottom:10px">
+      <div style="font-size:13px;margin-bottom:5px">⭐⭐⭐⭐⭐</div>
+      <div style="font-size:13px;color:var(--dk);line-height:1.65;margin-bottom:7px">"조용히 흐르는 이야기인데 마지막 장에서 눈물이 났어요."</div>
+      <div style="font-size:11px;color:var(--br);opacity:.48">민준* · 2025년 10월</div>
+    </div>
+    <div style="background:#fff;border-radius:14px;padding:15px">
+      <div style="font-size:13px;margin-bottom:5px">⭐⭐⭐⭐☆</div>
+      <div style="font-size:13px;color:var(--dk);line-height:1.65;margin-bottom:7px">"주인공의 시선이 너무 담담해서 오히려 더 슬펐어요."</div>
+      <div style="font-size:11px;color:var(--br);opacity:.48">서아* · 2025년 8월</div>
+    </div>
+  </div>
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:14px 20px calc(var(--sab)+24px);background:linear-gradient(to top,var(--cr) 80%,transparent)">
+    <div class="cx"><button class="btn" onclick="goTo(17)">읽으러 가기</button></div>
+  </div>
+</div>
+
+<!-- ═══ S17 · BOOK CTA 모달 ═══ -->
+<div class="screen" id="s17">
+  <div style="position:absolute;inset:0;filter:blur(3px);opacity:.3;pointer-events:none">
+    <div class="bcover" style="height:200px"></div>
+    <div style="padding:20px 20px"><div style="font-size:22px;font-weight:700;color:var(--dk)">아몬드</div><div style="font-size:14px;color:var(--br)">손원평 지음</div></div>
+  </div>
+  <div class="movl">
+    <div class="msheet">
+      <div class="mhandle"></div>
+      <div style="font-size:18px;font-weight:700;color:var(--dk);margin-bottom:6px">외부 링크로 이동할게요.</div>
+      <div style="font-size:13px;color:var(--br);opacity:.68;margin-bottom:24px">선택한 앱 또는 사이트로 연결돼.</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+        <div style="background:var(--lb);border-radius:14px;padding:15px 17px;display:flex;align-items:center;gap:13px;cursor:pointer" onclick="goTo(15)">
+          <div style="width:40px;height:40px;background:var(--bg);border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">📚</div>
+          <div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--dk)">밀리의 서재</div><div style="font-size:12px;color:var(--br);opacity:.58">구독 이용 가능</div></div>
+          <div style="font-size:13px;color:var(--bg);font-weight:500">이동 →</div>
+        </div>
+        <div style="background:var(--lb);border-radius:14px;padding:15px 17px;display:flex;align-items:center;gap:13px;cursor:pointer" onclick="goTo(15)">
+          <div style="width:40px;height:40px;background:#2ECC71;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🛒</div>
+          <div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--dk)">예스24</div><div style="font-size:12px;color:var(--br);opacity:.58">전자책 구매</div></div>
+          <div style="font-size:13px;color:var(--bg);font-weight:500">이동 →</div>
+        </div>
+      </div>
+      <button class="btn" onclick="goTo(15)" style="margin-bottom:10px">이동하기</button>
+      <button class="btn ghost" onclick="goTo(16)">취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S18 · SETTINGS ═══ -->
+<div class="screen" id="s18">
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+12px) 18px 16px;display:flex;align-items:center">
+    <div onclick="toggleMenu()" style="display:flex;flex-direction:column;gap:5px;cursor:pointer;padding:3px 2px;flex-shrink:0">
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+    </div>
+  </div>
+  <div class="body cx" style="padding-bottom:calc(var(--sab) + 90px)">
+    <div style="margin:0 18px 18px;background:#fff;border-radius:20px;padding:18px;display:flex;align-items:center;gap:13px">
+      <div style="width:50px;height:50px;background:linear-gradient(135deg,var(--bg),var(--br));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px">🌿</div>
+      <div><div style="font-size:16px;font-weight:600;color:var(--dk)">오늘의 독자</div><div style="font-size:13px;color:var(--br);opacity:.62;margin-top:2px">12개의 편지 수신 · 4주 연속 🔥</div></div>
+    </div>
+    <div class="sgroup">
+      <div class="sg-t">알림</div>
+      <div class="si">
+        <div><div class="si-txt">매일 한 마디 알림</div><div class="si-sub">하루 한 번 책 편지를 보내줄게</div></div>
+        <div class="tog" onclick="this.classList.toggle('off')"><div class="tok"></div></div>
+      </div>
+      <div class="si"><div><div class="si-txt">알림 시간</div><div class="si-sub">오후 9:00</div></div><div style="font-size:13px;color:var(--bg);font-weight:500">변경 →</div></div>
+    </div>
+    <div class="sgroup" style="margin-top:14px">
+      <div class="sg-t">앱</div>
+      <div class="si"><div class="si-txt">언어</div><div style="font-size:13px;color:var(--br);opacity:.6">한국어</div></div>
+      <div class="si"><div class="si-txt">테마</div><div style="font-size:13px;color:var(--br);opacity:.6">따뜻한 크림</div></div>
+    </div>
+    <div class="sgroup" style="margin-top:14px">
+      <div class="sg-t">책친구</div>
+      <div class="si" onclick="goTo(23)"><div class="si-txt">나의 기록</div><div style="font-size:14px;color:var(--bg);opacity:.8">›</div></div>
+      <div class="si" onclick="goTo(19)"><div class="si-txt">잠금화면 알림 미리보기</div><div style="font-size:14px;color:var(--bg);opacity:.8">›</div></div>
+      <div class="si" onclick="goTo(20)"><div class="si-txt">앱 아이콘 미리보기</div><div style="font-size:14px;color:var(--bg);opacity:.8">›</div></div>
+      <div class="si"><div class="si-txt">개인정보 처리방침</div><div style="font-size:14px;color:var(--br);opacity:.4">›</div></div>
+      <div class="si"><div class="si-txt">버전 정보</div><div style="font-size:13px;color:var(--br);opacity:.5">v1.0.0</div></div>
+    </div>
+    <div style="text-align:center;padding:26px 0">
+      <div style="font-size:26px;margin-bottom:8px">📖</div>
+      <div style="font-size:13px;color:var(--br);opacity:.5;line-height:1.72">책친구는 당신의 하루에<br>조용히 말을 걸고 싶어요.</div>
+    </div>
+  </div>
+  <!-- BOTTOM NAV · 설정 active -->
+  <div class="bnav">
+    <div class="bnav-row">
+      <div class="bni" onclick="goTo(8)"><div class="bni-ic">🏠</div><div class="bni-lb">홈</div></div>
+      <div class="bni" onclick="goTo(12)"><div class="bni-ic">💌</div><div class="bni-lb">보관함</div></div>
+      <div class="bni on" onclick="goTo(18)"><div class="bni-ic">⚙️</div><div class="bni-lb">설정</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S19 · NOTIFICATION ═══ -->
+<div class="screen" id="s19" style="background:#1A0D05">
+  <div class="lockbg">
+    <div style="position:absolute;top:calc(var(--sat)+16px);left:18px" onclick="goTo(18)">
+      <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:5px 12px;font-size:11px;color:rgba(255,255,255,.52);cursor:pointer">← 설정으로</div>
+    </div>
+    <div style="position:absolute;top:calc(var(--sat)+16px);right:18px" onclick="goTo(20)">
+      <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:5px 12px;font-size:11px;color:rgba(255,255,255,.52);cursor:pointer">앱 아이콘 →</div>
+    </div>
+    <div style="text-align:center;margin-bottom:36px">
+      <div style="font-size:72px;font-weight:200;color:rgba(255,255,255,.92);letter-spacing:-3px;line-height:1">21:12</div>
+      <div style="font-size:16px;color:rgba(255,255,255,.6);margin-top:7px">2026년 5월 12일 화요일</div>
+    </div>
+    <div style="max-width:480px;margin:0 auto;width:100%">
+      <div style="background:rgba(255,255,255,.13);backdrop-filter:blur(20px);border-radius:18px;padding:14px 16px;border:1px solid rgba(255,255,255,.1);animation:su .4s ease">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <div style="width:22px;height:22px;background:var(--bg);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px">📖</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.68);font-weight:500">책친구</div>
+          <div style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.4)">방금</div>
+        </div>
+        <div style="font-size:14px;font-weight:600;color:rgba(255,255,255,.92);margin-bottom:4px">오늘의 한 마디가 도착했어요. 📬</div>
+        <div style="font-size:13px;color:rgba(255,255,255,.68);line-height:1.52">"세상은 나 없이도 잘 돌아갔고, 나는 그 틈에서 조용히 숨을 쉬고 있었다." — 손원평</div>
+      </div>
+    </div>
+    <div style="position:absolute;bottom:calc(var(--sab)+80px);left:0;right:0;display:flex;justify-content:center;gap:60px">
+      <div style="color:rgba(255,255,255,.35);font-size:26px">🔦</div>
+      <div style="color:rgba(255,255,255,.35);font-size:26px">📷</div>
+    </div>
+    <div style="position:absolute;bottom:calc(var(--sab)+42px);left:0;right:0;text-align:center;font-size:12px;color:rgba(255,255,255,.28);letter-spacing:.5px">위로 쓸어올려 잠금 해제</div>
+  </div>
+</div>
+
+<!-- ═══ S20 · APP LAUNCHER ═══ -->
+<div class="screen" id="s20">
+  <div class="launchbg">
+    <div style="position:absolute;top:calc(var(--sat)+16px);left:18px" onclick="goTo(19)">
+      <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:5px 12px;font-size:11px;color:rgba(255,255,255,.52);cursor:pointer">← 잠금화면</div>
+    </div>
+    <div style="position:absolute;top:calc(var(--sat)+16px);right:18px" onclick="goTo(1)">
+      <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:5px 12px;font-size:11px;color:rgba(255,255,255,.52);cursor:pointer">처음으로 →</div>
+    </div>
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="font-size:62px;font-weight:200;color:rgba(255,255,255,.92);letter-spacing:-3px;line-height:1">21:12</div>
+      <div style="font-size:15px;color:rgba(255,255,255,.58);margin-top:7px">2026년 5월 12일 화요일</div>
+    </div>
+    <div class="appgrid cx" style="margin-bottom:28px">
+      <div class="aiw" onclick="goTo(1)">
+        <div class="aib main">
+          <svg width="32" height="32" viewBox="0 0 88 88" fill="none">
+            <rect x="9" y="14" width="54" height="64" rx="6" fill="rgba(255,255,255,.9)"/>
+            <rect x="7" y="14" width="8" height="64" rx="3" fill="rgba(255,255,255,.45)"/>
+            <circle cx="36" cy="42" r="15" fill="#D4A96A"/>
+            <circle cx="30" cy="40" r="2.8" fill="#3E2010"/><circle cx="42" cy="40" r="2.8" fill="#3E2010"/>
+            <path d="M30 48 Q36 53 42 48" stroke="#3E2010" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+          </svg>
+        </div>
+        <div class="ail">책친구</div>
+      </div>
+      <div class="aiw"><div class="aib" style="background:#007AFF">📱</div><div class="ail">전화</div></div>
+      <div class="aiw"><div class="aib" style="background:#34C759">💬</div><div class="ail">메시지</div></div>
+      <div class="aiw"><div class="aib" style="background:#FF9500">🌐</div><div class="ail">사파리</div></div>
+      <div class="aiw"><div class="aib" style="background:#5856D6">🎵</div><div class="ail">음악</div></div>
+      <div class="aiw"><div class="aib" style="background:#FF2D55">📸</div><div class="ail">사진</div></div>
+      <div class="aiw"><div class="aib" style="background:#30D158">🗺️</div><div class="ail">지도</div></div>
+      <div class="aiw"><div class="aib" style="background:#FFCC00">📝</div><div class="ail">메모</div></div>
+      <div class="aiw"><div class="aib" style="background:#32ADE6">☁️</div><div class="ail">날씨</div></div>
+      <div class="aiw"><div class="aib" style="background:#FF9F0A">⏰</div><div class="ail">시계</div></div>
+      <div class="aiw"><div class="aib" style="background:#BF5AF2">🎙️</div><div class="ail">팟캐스트</div></div>
+      <div class="aiw"><div class="aib" style="background:#1C1C1E;border:1px solid rgba(255,255,255,.08)">⚙️</div><div class="ail">설정</div></div>
+    </div>
+    <div class="ldock cx">
+      <div class="aiw" onclick="goTo(1)">
+        <div class="aib main" style="width:54px;height:54px">
+          <svg width="26" height="26" viewBox="0 0 88 88" fill="none">
+            <rect x="9" y="14" width="54" height="64" rx="6" fill="rgba(255,255,255,.9)"/>
+            <rect x="7" y="14" width="8" height="64" rx="3" fill="rgba(255,255,255,.45)"/>
+            <circle cx="36" cy="42" r="15" fill="#D4A96A"/>
+            <circle cx="30" cy="40" r="2.8" fill="#3E2010"/><circle cx="42" cy="40" r="2.8" fill="#3E2010"/>
+            <path d="M30 48 Q36 53 42 48" stroke="#3E2010" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+          </svg>
+        </div>
+      </div>
+      <div class="aiw"><div class="aib" style="width:54px;height:54px;background:#007AFF">📱</div></div>
+      <div class="aiw"><div class="aib" style="width:54px;height:54px;background:#34C759">💬</div></div>
+      <div class="aiw"><div class="aib" style="width:54px;height:54px;background:#FF9500">🌐</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S21 · 직접 입력하기 ═══ -->
+<div class="screen" id="s21">
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+12px) 20px 8px;display:flex;align-items:center;gap:10px">
+    <div class="back" onclick="goTo(7)">←</div>
+    <div style="font-size:15px;font-weight:600;color:var(--dk)">직접 입력하기</div>
+  </div>
+  <div class="body cx" style="padding:8px 20px calc(var(--sab)+32px)">
+    <div style="font-size:24px;font-weight:700;color:var(--dk);margin-bottom:6px;line-height:1.38">오늘 감정을<br>직접 써봐.</div>
+    <div style="font-size:13.5px;color:var(--br);opacity:.62;margin-bottom:20px;line-height:1.65">어떤 말도 괜찮아. 여기는 아무도 안 봐. 😌</div>
+    <div style="background:#fff;border-radius:18px;padding:18px 20px;box-shadow:0 2px 16px rgba(62,32,16,.07);margin-bottom:18px">
+      <textarea style="width:100%;min-height:130px;border:none;outline:none;font-size:15px;color:var(--dk);line-height:1.75;resize:none;font-family:inherit;background:transparent" placeholder="오늘 이런 느낌이야...&#10;&#10;예) 뭔가 억울한데 설명하기가 어려운 그런 날"></textarea>
+    </div>
+    <div style="font-size:11.5px;color:var(--br);opacity:.48;margin-bottom:10px">혹시 이런 감정이야?</div>
+    <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:28px">
+      <div class="etag" onclick="toggleTag(this)">😮‍💨 답답한</div>
+      <div class="etag" onclick="toggleTag(this)">🌟 설레는</div>
+      <div class="etag" onclick="toggleTag(this)">🪨 무거운</div>
+      <div class="etag" onclick="toggleTag(this)">🫧 허전한</div>
+      <div class="etag" onclick="toggleTag(this)">😤 억울한</div>
+      <div class="etag" onclick="toggleTag(this)">🤍 그냥 힘든</div>
+      <div class="etag" onclick="toggleTag(this)">🌀 복잡한</div>
+      <div class="etag" onclick="toggleTag(this)">😶 아무 생각 없는</div>
+    </div>
+    <button class="btn" onclick="goTo(22)">편지 받기 →</button>
+  </div>
+</div>
+
+<!-- ═══ S22 · 편지 생성 중 (로딩) ═══ -->
+<div class="screen" id="s22" style="align-items:center;justify-content:center;background:var(--cr)">
+  <div style="text-align:center;padding:0 32px;max-width:380px">
+    <div style="font-size:64px;margin-bottom:28px;animation:fadeInUp .7s ease both">📖</div>
+    <div style="font-size:20px;font-weight:700;color:var(--dk);margin-bottom:10px;line-height:1.5;animation:fadeInUp .7s .15s ease both">책친구가 편지를<br>준비하고 있어...</div>
+    <div style="font-size:13px;color:var(--br);opacity:.55;line-height:1.75;margin-bottom:30px;animation:fadeInUp .7s .3s ease both">오늘의 기분을 읽고,<br>딱 맞는 한 줄을 고르는 중이야.</div>
+    <div style="display:flex;justify-content:center;gap:8px;animation:fadeInUp .7s .45s ease both">
+      <div class="ldot"></div>
+      <div class="ldot" style="animation-delay:.2s"></div>
+      <div class="ldot" style="animation-delay:.4s"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S23 · 나의 기록 ═══ -->
+<div class="screen" id="s23">
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+12px) 18px 14px;display:flex;align-items:center">
+    <div onclick="toggleMenu()" style="display:flex;flex-direction:column;gap:5px;cursor:pointer;padding:3px 2px;flex-shrink:0">
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+    </div>
+  </div>
+  <div class="body cx" style="padding:0 18px calc(var(--sab)+80px)">
+    <!-- 요약 스탯 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:20px">
+      <div style="background:#fff;border-radius:18px;padding:18px 10px;text-align:center;box-shadow:0 2px 12px rgba(62,32,16,.06)">
+        <div style="font-size:28px;font-weight:700;color:var(--dk);margin-bottom:4px">12</div>
+        <div style="font-size:11px;color:var(--br);opacity:.6;line-height:1.5">받은<br>편지</div>
+      </div>
+      <div style="background:#fff;border-radius:18px;padding:18px 10px;text-align:center;box-shadow:0 2px 12px rgba(62,32,16,.06)">
+        <div style="font-size:28px;font-weight:700;color:var(--dk);margin-bottom:4px">28🔥</div>
+        <div style="font-size:11px;color:var(--br);opacity:.6;line-height:1.5">연속<br>사용일</div>
+      </div>
+      <div style="background:#fff;border-radius:18px;padding:18px 10px;text-align:center;box-shadow:0 2px 12px rgba(62,32,16,.06)">
+        <div style="font-size:28px;font-weight:700;color:var(--dk);margin-bottom:4px">5</div>
+        <div style="font-size:11px;color:var(--br);opacity:.6;line-height:1.5">나눈<br>대화</div>
+      </div>
+    </div>
+    <!-- 감정 분포 -->
+    <div style="background:#fff;border-radius:18px;padding:20px;margin-bottom:16px;box-shadow:0 2px 12px rgba(62,32,16,.06)">
+      <div style="font-size:14px;font-weight:600;color:var(--dk);margin-bottom:16px">자주 느낀 감정</div>
+      <div style="display:flex;flex-direction:column;gap:11px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:12.5px;color:var(--br);width:90px;flex-shrink:0">🐣 찜찜</div>
+          <div style="flex:1;height:7px;background:var(--lb);border-radius:4px;overflow:hidden"><div style="height:100%;width:75%;background:var(--bg);border-radius:4px"></div></div>
+          <div style="font-size:11.5px;color:var(--br);opacity:.55;width:22px;text-align:right">4회</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:12.5px;color:var(--br);width:90px;flex-shrink:0">🫣 지침</div>
+          <div style="flex:1;height:7px;background:var(--lb);border-radius:4px;overflow:hidden"><div style="height:100%;width:56%;background:var(--bg);border-radius:4px;opacity:.8"></div></div>
+          <div style="font-size:11.5px;color:var(--br);opacity:.55;width:22px;text-align:right">3회</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:12.5px;color:var(--br);width:90px;flex-shrink:0">💬 꺼내기 애매</div>
+          <div style="flex:1;height:7px;background:var(--lb);border-radius:4px;overflow:hidden"><div style="height:100%;width:38%;background:var(--bg);border-radius:4px;opacity:.65"></div></div>
+          <div style="font-size:11.5px;color:var(--br);opacity:.55;width:22px;text-align:right">2회</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:12.5px;color:var(--br);width:90px;flex-shrink:0">😪 자고 싶은</div>
+          <div style="flex:1;height:7px;background:var(--lb);border-radius:4px;overflow:hidden"><div style="height:100%;width:19%;background:var(--bg);border-radius:4px;opacity:.5"></div></div>
+          <div style="font-size:11.5px;color:var(--br);opacity:.55;width:22px;text-align:right">1회</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:12.5px;color:var(--br);width:90px;flex-shrink:0">🔥 잘 되고 싶은</div>
+          <div style="flex:1;height:7px;background:var(--lb);border-radius:4px;overflow:hidden"><div style="height:100%;width:19%;background:var(--bg);border-radius:4px;opacity:.5"></div></div>
+          <div style="font-size:11.5px;color:var(--br);opacity:.55;width:22px;text-align:right">1회</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:12.5px;color:var(--br);width:90px;flex-shrink:0">✏️ 직접 입력</div>
+          <div style="flex:1;height:7px;background:var(--lb);border-radius:4px;overflow:hidden"><div style="height:100%;width:19%;background:var(--bg);border-radius:4px;opacity:.5"></div></div>
+          <div style="font-size:11.5px;color:var(--br);opacity:.55;width:22px;text-align:right">1회</div>
+        </div>
+      </div>
+    </div>
+    <!-- 최근 편지 -->
+    <div style="font-size:14px;font-weight:600;color:var(--dk);margin-bottom:12px">최근 받은 편지</div>
+    <div style="background:#fff;border-radius:16px;padding:16px 18px;margin-bottom:10px;cursor:pointer;transition:background .15s" onclick="goTo(12)" onmouseover="this.style.background='#faf6ef'" onmouseout="this.style.background='#fff'">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div class="chip" style="font-size:11.5px;padding:5px 11px">🐣 찜찜</div>
+        <div style="font-size:11px;color:var(--br);opacity:.4">5월 12일</div>
+      </div>
+      <div style="font-size:13.5px;color:var(--dk);line-height:1.65;font-style:italic">"세상은 나 없이도 잘 돌아갔고..."</div>
+      <div style="font-size:11px;color:var(--br);opacity:.5;margin-top:5px">『아몬드』— 손원평</div>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:16px 18px;margin-bottom:10px;cursor:pointer;transition:background .15s" onclick="goTo(13)" onmouseover="this.style.background='#faf6ef'" onmouseout="this.style.background='#fff'">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div class="chip" style="font-size:11.5px;padding:5px 11px">🫣 지침</div>
+        <div style="font-size:11px;color:var(--br);opacity:.4">5월 10일</div>
+      </div>
+      <div style="font-size:13.5px;color:var(--dk);line-height:1.65;font-style:italic">"아무것도 하지 않는 것이 가장..."</div>
+      <div style="font-size:11px;color:var(--br);opacity:.5;margin-top:5px">『채식주의자』— 한강</div>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:16px 18px;cursor:pointer;transition:background .15s" onclick="goTo(14)" onmouseover="this.style.background='#faf6ef'" onmouseout="this.style.background='#fff'">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div class="chip" style="font-size:11.5px;padding:5px 11px">💬 꺼내기 애매</div>
+        <div style="font-size:11px;color:var(--br);opacity:.4">5월 9일</div>
+      </div>
+      <div style="font-size:13.5px;color:var(--dk);line-height:1.65;font-style:italic">"우리는 말하지 않은 것들로..."</div>
+      <div style="font-size:11px;color:var(--br);opacity:.5;margin-top:5px">『82년생 김지영』— 조남주</div>
+    </div>
+  </div>
+  <!-- BOTTOM NAV -->
+  <div class="bnav">
+    <div class="bnav-row">
+      <div class="bni" onclick="goTo(8)"><div class="bni-ic">🏠</div><div class="bni-lb">홈</div></div>
+      <div class="bni" onclick="goTo(12)"><div class="bni-ic">💌</div><div class="bni-lb">보관함</div></div>
+      <div class="bni" onclick="goTo(18)"><div class="bni-ic">⚙️</div><div class="bni-lb">설정</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S24 · ARCHIVE 보관된 편지 #4 (자고 싶은) ═══ -->
+<div class="screen" id="s24">
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+12px) 18px 10px;display:flex;align-items:center">
+    <div onclick="toggleMenu()" style="display:flex;flex-direction:column;gap:5px;cursor:pointer;padding:3px 2px;flex-shrink:0">
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+    </div>
+  </div>
+  <div class="archips-wrap">
+    <div class="archips">
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(12)">🐣 찜찜</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(13)">🫣 지침</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(14)">💬 꺼내기 애매</div>
+      <div class="chip" style="background:var(--bg);color:#fff;cursor:pointer;flex-shrink:0" onclick="goTo(24)">😪 자고 싶은</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(25)">🔥 잘 되고 싶은</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(26)">✏️ 직접 입력</div>
+    </div>
+  </div>
+  <div class="body cx" style="padding:0 18px calc(var(--sab)+90px)">
+    <div class="qcard" style="margin-bottom:14px">
+      <span class="qmark">"</span>
+      <div class="qtext">오늘 하루도 수고했어. 이제 눈 감아도 돼.</div>
+      <span class="qmark-r">"</span>
+    </div>
+    <div class="bookcard" style="margin-bottom:14px" onclick="goTo(15)">
+      <div class="bookcov">📖</div>
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--dk);margin-bottom:3px">달러구트 꿈 백화점</div>
+        <div style="font-size:13px;color:var(--br);margin-bottom:2px">이미예 지음</div>
+        <div style="font-size:11.5px;color:var(--br);opacity:.6;margin-bottom:10px">팩토리나인 · 2020</div>
+        <div style="font-size:12px;color:var(--bg);font-weight:500">책 자세히 보기 →</div>
+      </div>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:18px;margin-bottom:16px;border-left:3px solid var(--bg)">
+      <div style="font-size:11px;color:var(--bg);font-weight:600;margin-bottom:8px">📖 책친구의 한 마디</div>
+      <div style="font-size:14px;color:var(--dk);line-height:1.72">빨리 자고 싶다는 건, 오늘 하루를 그만큼 꽉 채웠다는 거야. 잘 자. 꿈에서도 쉬어. 🌙</div>
+    </div>
+    <div style="text-align:center;font-size:12px;color:var(--br);opacity:.4">2026년 5월 8일 오후 11:04에 받음</div>
+  </div>
+  <div class="bnav">
+    <div class="bnav-row">
+      <div class="bni" onclick="goTo(8)"><div class="bni-ic">🏠</div><div class="bni-lb">홈</div></div>
+      <div class="bni on" onclick="goTo(12)"><div class="bni-ic">💌</div><div class="bni-lb">보관함</div></div>
+      <div class="bni" onclick="goTo(18)"><div class="bni-ic">⚙️</div><div class="bni-lb">설정</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S25 · ARCHIVE 보관된 편지 #5 (잘 되고 싶은) ═══ -->
+<div class="screen" id="s25">
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+12px) 18px 10px;display:flex;align-items:center">
+    <div onclick="toggleMenu()" style="display:flex;flex-direction:column;gap:5px;cursor:pointer;padding:3px 2px;flex-shrink:0">
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+    </div>
+  </div>
+  <div class="archips-wrap">
+    <div class="archips">
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(12)">🐣 찜찜</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(13)">🫣 지침</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(14)">💬 꺼내기 애매</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(24)">😪 자고 싶은</div>
+      <div class="chip" style="background:var(--bg);color:#fff;cursor:pointer;flex-shrink:0" onclick="goTo(25)">🔥 잘 되고 싶은</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(26)">✏️ 직접 입력</div>
+    </div>
+  </div>
+  <div class="body cx" style="padding:0 18px calc(var(--sab)+90px)">
+    <div class="qcard" style="margin-bottom:14px">
+      <span class="qmark">"</span>
+      <div class="qtext">원하는 것이 있다는 것 자체가, 이미 앞으로 나아가고 있다는 뜻이다.</div>
+      <span class="qmark-r">"</span>
+    </div>
+    <div class="bookcard" style="margin-bottom:14px" onclick="goTo(15)">
+      <div class="bookcov">📖</div>
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--dk);margin-bottom:3px">나는 왜 이 일을 하는가</div>
+        <div style="font-size:13px;color:var(--br);margin-bottom:2px">사이먼 사이넥 지음</div>
+        <div style="font-size:11.5px;color:var(--br);opacity:.6;margin-bottom:10px">세계사 · 2013</div>
+        <div style="font-size:12px;color:var(--bg);font-weight:500">책 자세히 보기 →</div>
+      </div>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:18px;margin-bottom:16px;border-left:3px solid var(--bg)">
+      <div style="font-size:11px;color:var(--bg);font-weight:600;margin-bottom:8px">📖 책친구의 한 마디</div>
+      <div style="font-size:14px;color:var(--dk);line-height:1.72">잘 되고 싶다는 마음이 있다는 건 이미 가능성이 있다는 거야. 그 마음을 붙잡아. 🔥</div>
+    </div>
+    <div style="text-align:center;font-size:12px;color:var(--br);opacity:.4">2026년 5월 6일 오후 8:30에 받음</div>
+  </div>
+  <div class="bnav">
+    <div class="bnav-row">
+      <div class="bni" onclick="goTo(8)"><div class="bni-ic">🏠</div><div class="bni-lb">홈</div></div>
+      <div class="bni on" onclick="goTo(12)"><div class="bni-ic">💌</div><div class="bni-lb">보관함</div></div>
+      <div class="bni" onclick="goTo(18)"><div class="bni-ic">⚙️</div><div class="bni-lb">설정</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S26 · ARCHIVE 보관된 편지 #6 (직접 입력) ═══ -->
+<div class="screen" id="s26">
+  <div class="cx" style="flex-shrink:0;padding:calc(var(--sat)+12px) 18px 10px;display:flex;align-items:center">
+    <div onclick="toggleMenu()" style="display:flex;flex-direction:column;gap:5px;cursor:pointer;padding:3px 2px;flex-shrink:0">
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+      <div style="width:20px;height:2px;background:var(--br);border-radius:1px"></div>
+    </div>
+  </div>
+  <div class="archips-wrap">
+    <div class="archips">
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(12)">🐣 찜찜</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(13)">🫣 지침</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(14)">💬 꺼내기 애매</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(24)">😪 자고 싶은</div>
+      <div class="chip" style="cursor:pointer;flex-shrink:0" onclick="goTo(25)">🔥 잘 되고 싶은</div>
+      <div class="chip" style="background:var(--bg);color:#fff;cursor:pointer;flex-shrink:0" onclick="goTo(26)">✏️ 직접 입력</div>
+    </div>
+  </div>
+  <div class="body cx" style="padding:0 18px calc(var(--sab)+90px)">
+    <div class="qcard" style="margin-bottom:14px">
+      <span class="qmark">"</span>
+      <div class="qtext">내가 쓴 말들은 내가 지나온 감정들의 지도야. 오늘도 그 지도에 한 줄을 더했어.</div>
+      <span class="qmark-r">"</span>
+    </div>
+    <div class="bookcard" style="margin-bottom:14px" onclick="goTo(15)">
+      <div class="bookcov">📖</div>
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--dk);margin-bottom:3px">우리가 빛의 속도로 갈 수 없다면</div>
+        <div style="font-size:13px;color:var(--br);margin-bottom:2px">김초엽 지음</div>
+        <div style="font-size:11.5px;color:var(--br);opacity:.6;margin-bottom:10px">허블 · 2019</div>
+        <div style="font-size:12px;color:var(--bg);font-weight:500">책 자세히 보기 →</div>
+      </div>
+    </div>
+    <div style="background:#fff;border-radius:16px;padding:18px;margin-bottom:16px;border-left:3px solid var(--bg)">
+      <div style="font-size:11px;color:var(--bg);font-weight:600;margin-bottom:8px">📖 책친구의 한 마디</div>
+      <div style="font-size:14px;color:var(--dk);line-height:1.72">네가 직접 쓴 그 감정, 제대로 마주한 거야. 그게 쉬운 일이 아니거든. 잘 했어. 🤍</div>
+    </div>
+    <div style="text-align:center;font-size:12px;color:var(--br);opacity:.4">2026년 5월 5일 오후 10:15에 받음</div>
+  </div>
+  <div class="bnav">
+    <div class="bnav-row">
+      <div class="bni" onclick="goTo(8)"><div class="bni-ic">🏠</div><div class="bni-lb">홈</div></div>
+      <div class="bni on" onclick="goTo(12)"><div class="bni-ic">💌</div><div class="bni-lb">보관함</div></div>
+      <div class="bni" onclick="goTo(18)"><div class="bni-ic">⚙️</div><div class="bni-lb">설정</div></div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /screens -->
+
+<!-- ══ NAV MENU OVERLAY ══ -->
+<div id="navmenu" style="position:fixed;inset:0;z-index:995;display:none">
+  <div onclick="closeMenu()" style="position:absolute;inset:0;background:rgba(15,6,2,.42)"></div>
+  <div style="position:absolute;top:0;left:0;bottom:0;width:272px;max-width:82vw;background:var(--cr);display:flex;flex-direction:column;animation:slideInL .24s ease">
+    <!-- 헤더 -->
+    <div style="padding:calc(var(--sat)+22px) 22px 18px;border-bottom:1px solid var(--lb);display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:22px;font-weight:600;color:var(--dk);letter-spacing:3px">책친구</div>
+        <div style="font-size:11px;color:var(--br);opacity:.52;margin-top:2px">오늘의 감정에 맞는 한 줄</div>
+      </div>
+      <div onclick="closeMenu()" style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--br);cursor:pointer;background:var(--lb)">✕</div>
+    </div>
+    <!-- 메뉴 항목 -->
+    <div style="flex:1;overflow-y:auto;padding:10px 0">
+      <div style="padding:6px 18px 4px;font-size:10px;color:var(--br);opacity:.45;letter-spacing:1.5px;text-transform:uppercase">주요 화면</div>
+      <div onclick="goTo(7);closeMenu()" class="nmitem">
+        <span style="font-size:19px">🏠</span><span style="font-size:15px;color:var(--dk)">감정 선택</span>
+      </div>
+      <div onclick="goTo(8);closeMenu()" class="nmitem">
+        <span style="font-size:19px">📬</span><span style="font-size:15px;color:var(--dk)">오늘의 편지</span>
+      </div>
+      <div onclick="goTo(9);closeMenu()" class="nmitem">
+        <span style="font-size:19px">💬</span><span style="font-size:15px;color:var(--dk)">책친구와 대화</span>
+      </div>
+      <div style="height:1px;background:var(--lb);margin:8px 18px"></div>
+      <div style="padding:6px 18px 4px;font-size:10px;color:var(--br);opacity:.45;letter-spacing:1.5px;text-transform:uppercase">보관 · 탐색</div>
+      <div onclick="goTo(12);closeMenu()" class="nmitem">
+        <span style="font-size:19px">💌</span><span style="font-size:15px;color:var(--dk)">보관된 편지</span>
+      </div>
+      <div onclick="goTo(15);closeMenu()" class="nmitem">
+        <span style="font-size:19px">📖</span><span style="font-size:15px;color:var(--dk)">책 상세 보기</span>
+      </div>
+      <div onclick="goTo(23);closeMenu()" class="nmitem">
+        <span style="font-size:19px">📊</span><span style="font-size:15px;color:var(--dk)">나의 기록</span>
+      </div>
+      <div style="height:1px;background:var(--lb);margin:8px 18px"></div>
+      <div style="padding:6px 18px 4px;font-size:10px;color:var(--br);opacity:.45;letter-spacing:1.5px;text-transform:uppercase">기타</div>
+      <div onclick="goTo(18);closeMenu()" class="nmitem">
+        <span style="font-size:19px">⚙️</span><span style="font-size:15px;color:var(--dk)">설정</span>
+      </div>
+      <div onclick="goTo(19);closeMenu()" class="nmitem">
+        <span style="font-size:19px">🔒</span><span style="font-size:15px;color:var(--dk)">잠금화면 알림</span>
+      </div>
+      <div onclick="goTo(20);closeMenu()" class="nmitem">
+        <span style="font-size:19px">📱</span><span style="font-size:15px;color:var(--dk)">앱 런처</span>
+      </div>
+    </div>
+    <div style="padding:14px 22px calc(var(--sab)+16px);border-top:1px solid var(--lb)">
+      <div onclick="goTo(1);closeMenu()" style="font-size:12px;color:var(--br);opacity:.5;cursor:pointer;text-align:center">처음으로 돌아가기</div>
+    </div>
+  </div>
+</div>
+
+<div class="ind" id="ind">1/20</div>
+<div class="snav L">
+  <button class="snb" onclick="prev()">‹</button>
+  <button class="snb" onclick="goTo(1)" title="처음">⌂</button>
+</div>
+<div class="snav R"><button class="snb" onclick="next()">›</button></div>
+
+<script>
+let c=1;
+const TOTAL=26;
+const archiveScreens=[12,13,14,24,25,26];
+
+function goTo(n){
+  if(n<1||n>TOTAL||n===c)return;
+  const pe=document.getElementById('s'+c);
+  const ne=document.getElementById('s'+n);
+  pe.classList.remove('active');
+  pe.classList.add('out');
+  setTimeout(()=>pe.classList.remove('out'),320);
+  ne.classList.add('active');
+  c=n;
+  document.getElementById('ind').textContent=c+'/'+TOTAL;
+  // S22 로딩 → 2.2초 후 S8로 자동 이동
+  if(n===22) setTimeout(()=>{if(c===22)goTo(8)},2200);
+}
+function next(){goTo(c<TOTAL?c+1:1)}
+function prev(){goTo(c>1?c-1:TOTAL)}
+
+// Swipe detection
+let tx=0,ty=0;
+document.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY},{passive:true});
+document.addEventListener('touchend',e=>{
+  const dx=e.changedTouches[0].clientX-tx;
+  const dy=e.changedTouches[0].clientY-ty;
+  if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>50){
+    // 온보딩 스와이프 (S1–S6)
+    if(c<=6){dx<0?next():prev();}
+    // 보관함 스와이프 (6개 감정 순환)
+    else if(archiveScreens.includes(c)){
+      const idx=archiveScreens.indexOf(c);
+      if(dx<0&&idx<archiveScreens.length-1)goTo(archiveScreens[idx+1]);
+      else if(dx>0&&idx>0)goTo(archiveScreens[idx-1]);
+    }
+  }
+},{passive:true});
+
+// Keyboard
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key==='ArrowDown')next();
+  if(e.key==='ArrowLeft'||e.key==='ArrowUp')prev();
+});
+
+// Card selection
+function pickCard(el){
+  document.querySelectorAll('#s7g .ecard').forEach(x=>x.classList.remove('sel'));
+  el.classList.add('sel');
+  // 직접 입력하기 카드 → S21, 나머지 → S22 (로딩) → S8
+  if(el.classList.contains('blank')){
+    setTimeout(()=>goTo(21),220);
+  } else {
+    setTimeout(()=>goTo(22),220);
+  }
+}
+
+// 감정 태그 토글 (S21)
+function toggleTag(el){
+  el.classList.toggle('on');
+}
+
+// Auto-advance splash
+setTimeout(()=>{if(c===1)goTo(2)},2600);
+
+// S6 tap-anywhere = goTo(7)
+document.getElementById('s6').addEventListener('click',e=>{
+  if(e.target.closest('.btn'))return;
+  goTo(7);
+});
+
+// Nav menu
+function toggleMenu(){
+  const m=document.getElementById('navmenu');
+  m.style.display=m.style.display==='none'?'block':'none';
+}
+function closeMenu(){
+  document.getElementById('navmenu').style.display='none';
+}
+</script>
+</body>
+</html>
