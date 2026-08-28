@@ -5831,41 +5831,66 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     pts.push([cx, neckY + H * (g.neck === 'v' ? .052 : g.neck === 'deepv' ? .075 : .016)]);
     pts.push([cx - neckHalf * .55, neckY + H * (g.neck === 'v' || g.neck === 'deepv' ? .045 : .014)]);
 
+    var built = topAnchorsOf({
+      cx: cx, neckHalf: neckHalf, neckY: neckY, shY: shY, shHalf: shHalf,
+      armpitY: armpitY, bodyHalf: bodyHalf, chestY: H * .330,
+      waistHalf: waistHalf, waistY: H * .432, hemHalf: hemHalf, hemY: hemY,
+      sleeve: sleeve, cuffY: cuffY, cuffOut: cuffOut, cuffIn: cuffIn, cuffInY: cuffInY,
+      neck: g.neck
+    });
+    return { pts: pts, anchors: built.anchors, geom: built.geom };
+  }
+
+  /* =======================================================================
+   * 3-b. 대응점 생성기 — **옷본과 반입 사진이 같은 식을 쓴다**
+   *
+   * 절차적 옷본은 이 숫자들을 설계로 정하고, 사진에서 반입한 옷은 실루엣에서
+   * 재서 넣는다. 그 뒤는 완전히 같다.
+   *
+   * 이렇게 갈라놓기 전에는 반입 쪽이 대응점을 다섯 쌍(목·어깨·소매끝·허리·
+   * 밑단)만 만들었다. 그래서 bodyAnchors 가 겨드랑이(pitL)를 읽는 순간
+   * 그대로 터졌고, 소매 조각도 만들어지지 않았다. 반입한 옷은 **입어볼 수
+   * 없는 상태**였다는 뜻이다.
+   * ===================================================================== */
+  function topAnchorsOf(P) {
+    var cx = P.cx;
+    var hasSleeve = P.sleeve !== 'none' && P.cuffY > P.armpitY * 1.05;
+    var midSleeveY = P.armpitY + (P.cuffY - P.armpitY) * 0.5;
     return {
-      pts: pts,
       // 대응점이 성길수록 그 사이의 천이 제멋대로 늘어난다. 겨드랑이와 가슴을
       // 넣어 몸통을 네 단으로 묶으면 어깨-허리 사이가 접히지 않는다.
       anchors: {
-        neckL:  [cx - neckHalf, neckY],
-        neckR:  [cx + neckHalf, neckY],
-        shL:    [cx - shHalf, shY],
-        shR:    [cx + shHalf, shY],
-        pitL:   [cx - bodyHalf * .99, armpitY],
-        pitR:   [cx + bodyHalf * .99, armpitY],
-        chestL: [cx - bodyHalf, H * .330],
-        chestR: [cx + bodyHalf, H * .330],
+        neckL:  [cx - P.neckHalf, P.neckY],
+        neckR:  [cx + P.neckHalf, P.neckY],
+        shL:    [cx - P.shHalf, P.shY],
+        shR:    [cx + P.shHalf, P.shY],
+        pitL:   [cx - P.bodyHalf * .99, P.armpitY],
+        pitR:   [cx + P.bodyHalf * .99, P.armpitY],
+        chestL: [cx - P.bodyHalf, P.chestY],
+        chestR: [cx + P.bodyHalf, P.chestY],
         // 소매는 몸통과 따로 변형되므로(tryon.js buildParts) 안쪽 가장자리까지
         // 필요하다. 어깨끝과 소매끝만 묶으면 그 사이가 몸통 쪽으로 빨려 들어가
         // 팔에 구멍이 뚫린다.
         // 중간 지지점은 **소매 구간 안**(겨드랑이~소맷부리)에 놓아야 한다.
         // 어깨~소맷부리의 중점으로 잡으면 반팔에서는 그 점이 겨드랑이보다
         // 위, 즉 소매가 아닌 요크 영역에 떨어져 소매 변형이 뒤틀린다.
-        elbowOutL: hasSleeve ? [cx - (shHalf + (cuffOut - shHalf) * .5) * 1.02, midSleeveY] : null,
-        elbowOutR: hasSleeve ? [cx + (shHalf + (cuffOut - shHalf) * .5) * 1.02, midSleeveY] : null,
-        elbowInL:  hasSleeve ? [cx - (bodyHalf * .99 + (cuffIn - bodyHalf * .99) * .5) * .99, midSleeveY] : null,
-        elbowInR:  hasSleeve ? [cx + (bodyHalf * .99 + (cuffIn - bodyHalf * .99) * .5) * .99, midSleeveY] : null,
-        armL:   [cx - cuffOut, cuffY],
-        armR:   [cx + cuffOut, cuffY],
-        cuffInL: hasSleeve ? [cx - cuffIn, cuffInY] : null,
-        cuffInR: hasSleeve ? [cx + cuffIn, cuffInY] : null,
-        waistL: [cx - waistHalf, H * .432],
-        waistR: [cx + waistHalf, H * .432],
-        hemL:   [cx - hemHalf, hemY],
-        hemR:   [cx + hemHalf, hemY]
+        elbowOutL: hasSleeve ? [cx - (P.shHalf + (P.cuffOut - P.shHalf) * .5) * 1.02, midSleeveY] : null,
+        elbowOutR: hasSleeve ? [cx + (P.shHalf + (P.cuffOut - P.shHalf) * .5) * 1.02, midSleeveY] : null,
+        elbowInL:  hasSleeve ? [cx - (P.bodyHalf * .99 + (P.cuffIn - P.bodyHalf * .99) * .5) * .99, midSleeveY] : null,
+        elbowInR:  hasSleeve ? [cx + (P.bodyHalf * .99 + (P.cuffIn - P.bodyHalf * .99) * .5) * .99, midSleeveY] : null,
+        armL:   [cx - P.cuffOut, P.cuffY],
+        armR:   [cx + P.cuffOut, P.cuffY],
+        cuffInL: hasSleeve ? [cx - P.cuffIn, P.cuffInY] : null,
+        cuffInR: hasSleeve ? [cx + P.cuffIn, P.cuffInY] : null,
+        waistL: [cx - P.waistHalf, P.waistY],
+        waistR: [cx + P.waistHalf, P.waistY],
+        hemL:   [cx - P.hemHalf, P.hemY],
+        hemR:   [cx + P.hemHalf, P.hemY]
       },
-      geom: { cx: cx, shY: shY, neckY: neckY, armpitY: armpitY, hemY: hemY,
-              shHalf: shHalf, bodyHalf: bodyHalf, waistHalf: waistHalf,
-              hemHalf: hemHalf, cuffY: cuffY, cuffOut: cuffOut, sleeve: sleeve, neck: g.neck }
+      geom: { cx: cx, shY: P.shY, neckY: P.neckY, armpitY: P.armpitY, hemY: P.hemY,
+              shHalf: P.shHalf, bodyHalf: P.bodyHalf, waistHalf: P.waistHalf,
+              hemHalf: P.hemHalf, cuffY: P.cuffY, cuffOut: P.cuffOut,
+              sleeve: P.sleeve, neck: P.neck }
     };
   }
 
@@ -5915,45 +5940,55 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
         [cx + hipHalf, hipY], [cx + waistHalf, waistY], [cx, waistY - H * .012]
       ];
     }
+    var builtB = bottomAnchorsOf({
+      cx: cx, waistY: waistY, waistHalf: waistHalf, hipY: hipY, hipHalf: hipHalf,
+      crotchY: crotchY, hemY: hemY, legHalf: legHalf,
+      taper: g.taper == null ? 1 : g.taper, isSkirt: isSkirt,
+      flare: g.flare == null ? 1.25 : g.flare, crotchDrop: H * .04
+    });
+    return { pts: pts, anchors: builtB.anchors, geom: builtB.geom };
+  }
+
+  /** 하의 대응점 생성기 — 상의와 같은 이유로 옷본·반입 사진이 공유한다 */
+  function bottomAnchorsOf(P) {
+    var cx = P.cx;
+    // 바지는 다리가 둘이다. 바깥 윤곽만 대응시키면 가랑이 노치가 몸의
+    // 엉뚱한 높이에 놓여 다리가 토막나 보인다 — 실제로 그렇게 나왔다.
+    // 가랑이와 안쪽 밑단을 함께 묶어야 두 다리가 제자리를 찾는다.
+    var a = {
+      waistL: [cx - P.waistHalf, P.waistY], waistR: [cx + P.waistHalf, P.waistY],
+      hipL:   [cx - P.hipHalf, P.hipY],     hipR:   [cx + P.hipHalf, P.hipY],
+      hemL:   [cx - (P.isSkirt ? P.hipHalf * P.flare : P.legHalf * 1.25), P.hemY],
+      hemR:   [cx + (P.isSkirt ? P.hipHalf * P.flare : P.legHalf * 1.25), P.hemY]
+    };
+    if (!P.isSkirt) {
+      a.crotchC = [cx, P.crotchY];
+      a.hemLin  = [cx - P.legHalf * .35, P.hemY];
+      a.hemRin  = [cx + P.legHalf * .35, P.hemY];
+      /* 다리 하나를 통째로 묶는 대응점 6개.
+       * 가랑이와 밑단만 잡아두면 그 사이의 안쪽 솔기가 자유롭게 벌어져
+       * 두 다리가 한 덩어리로 붙어 버린다(치마처럼 보인다). 소매를 따로
+       * 변형하는 것과 같은 이유로, 다리도 각각 변형한다. */
+      var outAtHem = P.legHalf * P.taper + P.legHalf * .25;
+      var topOut = P.hipHalf * .92, topIn = P.legHalf * .08;
+      var leg = function (sign) {
+        var pts = [];
+        [0, .5, 1].forEach(function (t) {
+          var y = P.crotchY + t * (P.hemY - P.crotchY);
+          var o = topOut + (outAtHem - topOut) * t;
+          var iN = topIn + (P.legHalf * .35 - topIn) * t;
+          pts.push([cx + sign * o, y], [cx + sign * iN, y + (t === 0 ? P.crotchDrop : 0)]);
+        });
+        return pts;
+      };
+      a.legL = leg(-1);
+      a.legR = leg(1);
+    }
     return {
-      pts: pts,
-      // 바지는 다리가 둘이다. 바깥 윤곽만 대응시키면 가랑이 노치가 몸의
-      // 엉뚱한 높이에 놓여 다리가 토막나 보인다 — 실제로 그렇게 나왔다.
-      // 가랑이와 안쪽 밑단을 함께 묶어야 두 다리가 제자리를 찾는다.
-      anchors: (function () {
-        var a = {
-          waistL: [cx - waistHalf, waistY], waistR: [cx + waistHalf, waistY],
-          hipL:   [cx - hipHalf, hipY],     hipR:   [cx + hipHalf, hipY],
-          hemL:   [cx - (isSkirt ? hipHalf * (g.flare == null ? 1.25 : g.flare) : legHalf * 1.25), hemY],
-          hemR:   [cx + (isSkirt ? hipHalf * (g.flare == null ? 1.25 : g.flare) : legHalf * 1.25), hemY]
-        };
-        if (!isSkirt) {
-          a.crotchC = [cx, crotchY];
-          a.hemLin  = [cx - legHalf * .35, hemY];
-          a.hemRin  = [cx + legHalf * .35, hemY];
-          /* 다리 하나를 통째로 묶는 대응점 6개.
-           * 가랑이와 밑단만 잡아두면 그 사이의 안쪽 솔기가 자유롭게 벌어져
-           * 두 다리가 한 덩어리로 붙어 버린다(치마처럼 보인다). 소매를 따로
-           * 변형하는 것과 같은 이유로, 다리도 각각 변형한다. */
-          var outAtHem = legHalf * (g.taper == null ? 1 : g.taper) + legHalf * .25;
-          var topOut = hipHalf * .92, topIn = legHalf * .08;
-          function leg(sign) {
-            var pts = [];
-            [0, .5, 1].forEach(function (t) {
-              var y = crotchY + t * (hemY - crotchY);
-              var o = topOut + (outAtHem - topOut) * t;
-              var iN = topIn + (legHalf * .35 - topIn) * t;
-              pts.push([cx + sign * o, y], [cx + sign * iN, y + (t === 0 ? H * .04 : 0)]);
-            });
-            return pts;
-          }
-          a.legL = leg(-1);
-          a.legR = leg(1);
-        }
-        return a;
-      })(),
-      geom: { cx: cx, waistY: waistY, hipY: hipY, hemY: hemY, waistHalf: waistHalf,
-              hipHalf: hipHalf, isSkirt: isSkirt, crotchY: crotchY }
+      anchors: a,
+      geom: { cx: cx, waistY: P.waistY, hipY: P.hipY, hemY: P.hemY,
+              waistHalf: P.waistHalf, hipHalf: P.hipHalf,
+              isSkirt: P.isSkirt, crotchY: P.crotchY }
     };
   }
 
@@ -6452,56 +6487,217 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
    *       좌우 최외곽 = 소매끝, 마지막 행 = 밑단.
    * 자동값은 초안이며 사용자가 핸들로 고칠 수 있다 — 이 도구의 일관된 태도다.
    */
-  function estimateAnchors(mask, w, h, cat) {
+  /* =======================================================================
+   * 사진에서 옷본의 숫자를 잰다
+   *
+   * 평면 상품컷(흰 배경에 펼쳐 놓은 옷)의 실루엣에는 필요한 것이 다 있다.
+   * 잴 수 있는 것만 재고, 잴 수 없는 것(소맷부리 안쪽 모서리처럼 실루엣이
+   * 거의 한 점으로 만나는 자리)은 같은 소매 종류의 옷본 비율을 쓴다.
+   *
+   * 핵심은 **겨드랑이**다. 소매가 몸통에서 갈라지는 지점 아래로는 소매와
+   * 몸통 사이에 배경이 쐐기처럼 들어온다 — 한 행에 구간이 둘 이상 생긴다.
+   * 그 쐐기의 꼭짓점이 곧 겨드랑이다. 추정할 필요가 없다.
+   * ===================================================================== */
+  function rowScan(mask, w, h) {
     var rows = [];
     for (var y = 0; y < h; y++) {
-      var a = -1, b = -1, cnt = 0;
-      for (var x = 0; x < w; x++) if (mask[y * w + x]) { if (a < 0) a = x; b = x; cnt++; }
-      rows.push({ y: y, x0: a, x1: b, w: a < 0 ? 0 : b - a + 1, n: cnt });
+      var a = -1, b = -1, n = 0, runs = [], st = -1;
+      for (var x = 0; x < w; x++) {
+        if (mask[y * w + x]) {
+          if (a < 0) a = x; b = x; n++;
+          if (st < 0) st = x;
+        } else if (st >= 0) {
+          if (x - st > w * 0.012) runs.push([st, x - 1]);
+          st = -1;
+        }
+      }
+      if (st >= 0 && w - st > w * 0.012) runs.push([st, w - 1]);
+      var big = 0;
+      for (var i = 1; i < runs.length; i++) {
+        if (runs[i][1] - runs[i][0] > runs[big][1] - runs[big][0]) big = i;
+      }
+      rows.push({
+        y: y, x0: a, x1: b, w: a < 0 ? 0 : b - a + 1, n: n, runs: runs,
+        core: runs.length ? runs[big][1] - runs[big][0] + 1 : 0,
+        coreL: runs.length ? runs[big][0] : -1,
+        coreR: runs.length ? runs[big][1] : -1
+      });
     }
+    return rows;
+  }
+
+  /* 소매 종류별 비율 — 실루엣이 알려주지 않는 두 값만 여기서 가져온다.
+   *   K : 소맷부리 안쪽이 어깨~소매끝 사이 어디쯤인가
+   *   R : 소맷부리 안쪽이 겨드랑이~소매끝 사이 어디쯤인가(위로)
+   * (숫자는 절차적 옷본의 값에서 그대로 뽑았다) */
+  /* 기장 판정 — 길이 ÷ 폭.
+   * 사진에는 "이 옷이 몸의 어디까지 오는가"가 적혀 있지 않다. 대신 실제
+   * 옷의 비율이 알려준다: 어깨 너비 대비 길이(상의), 골반 너비 대비
+   * 길이(하의)는 기장마다 확연히 다르다.
+   * 판정하지 않으면 하의는 기본값 'knee' 로 떨어져, 긴 바지가 무릎에서
+   * 잘린 채로 입혀진다 — 실제로 그렇게 나왔다.
+   * 기준값은 절차적 옷본이 아니라 **실물 옷의 비율**에서 잡았다. 옷본은
+   * 어깨를 넓게 그린 양식화된 그림이라 기준으로 삼으면 한 단계씩 길게
+   * 판정된다. */
+  function pickBy(ratio, table) {
+    for (var i = 0; i < table.length - 1; i++) if (ratio < table[i][1]) return table[i][0];
+    return table[table.length - 1][0];
+  }
+  var HEM_RATIO_TOP = [['crop', 1.07], ['waist', 1.40], ['hip', 1.72], ['thigh', 2.15], ['knee', 9]];
+  var HEM_RATIO_BOTTOM = [['thigh', 1.15], ['knee', 1.70], ['midi', 2.25], ['ankle', 9]];
+
+  var SLEEVE_RATIO = {
+    long:   { K: 0.210, R: 0.058 },
+    threeq: { K: 0.126, R: 0.071 },
+    short:  { K: 0.032, R: 0.301 },
+    cap:    { K: -0.50, R: 0.330 }
+  };
+
+  function measureTop(mask, w, h) {
+    var rows = rowScan(mask, w, h);
     var top = 0; while (top < h && rows[top].w === 0) top++;
     var bot = h - 1; while (bot > top && rows[bot].w === 0) bot--;
-    if (bot <= top) return null;
     var HH = bot - top;
+    if (HH < h * 0.25) return null;
 
-    function widestIn(a, b) {
-      var bi = a, bv = -1;
-      for (var y = a; y <= b; y++) if (rows[y].w > bv) { bv = rows[y].w; bi = y; }
-      return rows[bi];
+    /* 중심축 — 아래쪽 절반(소매가 없는 몸통)의 중앙값 */
+    var cs = [];
+    for (var y = top + Math.round(HH * 0.55); y <= bot; y++) {
+      if (rows[y].core > 2) cs.push((rows[y].coreL + rows[y].coreR) / 2);
     }
-    function narrowIn(a, b) {
-      var bi = a, bv = 1e9;
-      for (var y = a; y <= b; y++) if (rows[y].w > 4 && rows[y].w < bv) { bv = rows[y].w; bi = y; }
-      return rows[bi];
-    }
-    var cxAll = (rows[top + ((HH * .3) | 0)].x0 + rows[top + ((HH * .3) | 0)].x1) / 2;
+    if (!cs.length) return null;
+    cs.sort(function (a, b) { return a - b; });
+    var cx = cs[cs.length >> 1];
 
-    if (cat === 'bottom') {
-      var wb = rows[top + Math.round(HH * .02)];
-      var hp = widestIn(top + Math.round(HH * .10), top + Math.round(HH * .40));
-      var hm = rows[bot - Math.round(HH * .02)];
-      return {
-        waistL: [wb.x0, wb.y], waistR: [wb.x1, wb.y],
-        hipL: [hp.x0, hp.y], hipR: [hp.x1, hp.y],
-        hemL: [hm.x0, hm.y], hemR: [hm.x1, hm.y]
-      };
+    /* 어깨 — 맨 위 3% 지점의 폭. 그보다 위는 목선 때문에 좁다. */
+    var shY = top + Math.max(1, Math.round(HH * 0.03));
+    var shHalf = rows[shY].w / 2;
+    if (!(shHalf > w * 0.04)) return null;
+
+    /* 소매 끝 — 가장 바깥으로 나간 행 */
+    var cuffY = shY, cuffOut = shHalf;
+    for (var y2 = shY; y2 <= top + Math.round(HH * 0.90); y2++) {
+      var half = rows[y2].w / 2;
+      if (half > cuffOut) { cuffOut = half; cuffY = y2; }
     }
 
-    var shRow = widestIn(top, top + Math.round(HH * .16));      // 어깨
-    var armRow = widestIn(top, top + Math.round(HH * .70));     // 소매 최외곽
-    var waistRow = narrowIn(top + Math.round(HH * .35), top + Math.round(HH * .70));
-    var hemRow = rows[bot - Math.max(1, Math.round(HH * .01))];
-    var neckRow = rows[top + Math.max(1, Math.round(HH * .02))];
-    var neckHalf = Math.max(6, neckRow.w * .22);
+    /* 겨드랑이 — 소매와 몸통 사이에 배경이 들어오는 첫 행 */
+    var armpitY = -1;
+    for (var y3 = shY; y3 <= top + Math.round(HH * 0.90); y3++) {
+      if (rows[y3].runs.length >= 2) { armpitY = y3; break; }
+    }
+    var sleeve;
+    if (armpitY < 0 || armpitY >= cuffY) {
+      /* 쐐기가 없다 = 민소매이거나 소매가 몸통에 붙게 찍힌 사진.
+       * 소매를 따로 변형하지 않고 요크로 다룬다. */
+      armpitY = top + Math.round(HH * 0.275);
+      sleeve = 'none';
+      cuffY = armpitY; cuffOut = shHalf * 0.90;
+    } else {
+      var t = (cuffY - top) / HH;
+      sleeve = t < 0.24 ? 'cap' : t < 0.45 ? 'short' : t < 0.72 ? 'threeq' : 'long';
+    }
+    var sr = SLEEVE_RATIO[sleeve] || SLEEVE_RATIO.short;
+
+    var hemY = bot - Math.max(1, Math.round(HH * 0.01));
+    var chestY = shY + (hemY - shY) * 0.458;      // 옷본과 같은 자리
+    var waistY = shY + (hemY - shY) * 0.649;
+    function coreHalf(y) {
+      var r = rows[Math.max(top, Math.min(bot, Math.round(y)))];
+      return (r && r.core > 2 ? r.core : r.w) / 2;
+    }
+    var bodyHalf = coreHalf(chestY);
+    var waistHalf = coreHalf(waistY);
+    var hemHalf = coreHalf(hemY);
+    if (!(bodyHalf > w * 0.03)) return null;
+
+    /* 목선 — 가운데가 뚫려 있으면 그 구멍의 아래끝, 아니면 어깨 대비 비율.
+     * (생성 이미지는 목선을 구멍이 아니라 그림으로 그리는 경우가 흔하다) */
+    var neckY = -1, neckHalf = shHalf * 0.37;
+    var cxi = Math.round(cx);
+    for (var y4 = top; y4 <= top + Math.round(HH * 0.25); y4++) {
+      if (!mask[y4 * w + cxi] && rows[y4].w > shHalf) neckY = y4;
+    }
+    if (neckY > top) {
+      var l = cxi; while (l > 0 && !mask[neckY * w + l]) l--;
+      var rr = cxi; while (rr < w - 1 && !mask[neckY * w + rr]) rr++;
+      neckHalf = Math.max(w * 0.02, (rr - l) / 2);
+    } else {
+      neckY = top + Math.round(HH * 0.045);
+    }
 
     return {
-      neckL: [cxAll - neckHalf, neckRow.y], neckR: [cxAll + neckHalf, neckRow.y],
-      shL: [shRow.x0, shRow.y], shR: [shRow.x1, shRow.y],
-      armL: [armRow.x0, armRow.y], armR: [armRow.x1, armRow.y],
-      waistL: [waistRow.x0, waistRow.y], waistR: [waistRow.x1, waistRow.y],
-      hemL: [hemRow.x0, hemRow.y], hemR: [hemRow.x1, hemRow.y]
+      cx: cx, neckHalf: neckHalf, neckY: neckY, shY: shY, shHalf: shHalf,
+      armpitY: armpitY, bodyHalf: bodyHalf, chestY: chestY,
+      waistHalf: waistHalf, waistY: waistY, hemHalf: hemHalf, hemY: hemY,
+      sleeve: sleeve, cuffY: cuffY, cuffOut: cuffOut,
+      cuffIn: shHalf + (cuffOut - shHalf) * sr.K,
+      cuffInY: cuffY - (cuffY - armpitY) * sr.R,
+      hem: pickBy((hemY - shY) / Math.max(1, shHalf * 2), HEM_RATIO_TOP),
+      neck: 'crew'
     };
   }
+
+  function measureBottom(mask, w, h) {
+    var rows = rowScan(mask, w, h);
+    var top = 0; while (top < h && rows[top].w === 0) top++;
+    var bot = h - 1; while (bot > top && rows[bot].w === 0) bot--;
+    var HH = bot - top;
+    if (HH < h * 0.25) return null;
+
+    var cs = [];
+    for (var y = top; y <= top + Math.round(HH * 0.30); y++) {
+      if (rows[y].w > 2) cs.push((rows[y].x0 + rows[y].x1) / 2);
+    }
+    if (!cs.length) return null;
+    cs.sort(function (a, b) { return a - b; });
+    var cx = cs[cs.length >> 1];
+
+    var waistY = top + Math.max(1, Math.round(HH * 0.015));
+    var waistHalf = rows[waistY].w / 2;
+    var hipY = waistY, hipHalf = waistHalf;
+    for (var y2 = waistY; y2 <= top + Math.round(HH * 0.45); y2++) {
+      if (rows[y2].w / 2 > hipHalf) { hipHalf = rows[y2].w / 2; hipY = y2; }
+    }
+    var hemY = bot - Math.max(1, Math.round(HH * 0.01));
+
+    /* 가랑이 — 두 다리로 갈라지는 첫 행. 없으면 치마다. */
+    var crotchY = -1;
+    for (var y3 = hipY; y3 <= bot; y3++) {
+      if (rows[y3].runs.length >= 2) { crotchY = y3; break; }
+    }
+    var isSkirt = crotchY < 0;
+    var legHalf = hipHalf * 0.46, taper = 1;
+    if (!isSkirt) {
+      /* 밑단에서 다리 하나의 바깥·안쪽을 그대로 읽는다.
+       * 옷본이 바깥을 legHalf*(taper+.25), 안쪽을 legHalf*.35 로 두므로
+       * 두 값에서 legHalf 와 taper 가 나온다 — 맞출 필요 없이 풀린다. */
+      var hr = rows[Math.round(hemY)];
+      var lft = null;
+      for (var i = 0; i < hr.runs.length; i++) {
+        if (hr.runs[i][1] < cx) { lft = hr.runs[i]; break; }
+      }
+      if (lft) {
+        var outH = cx - lft[0], inH = cx - lft[1];
+        if (inH > 1 && outH > inH) {
+          legHalf = inH / 0.35;
+          taper = outH / legHalf - 0.25;
+        }
+      }
+      taper = Math.max(0.55, Math.min(1.45, taper));
+      legHalf = Math.max(w * 0.03, Math.min(hipHalf * 0.85, legHalf));
+    }
+
+    return {
+      cx: cx, waistY: waistY, waistHalf: waistHalf, hipY: hipY, hipHalf: hipHalf,
+      crotchY: isSkirt ? hipY + (hemY - hipY) * 0.18 : crotchY,
+      hemY: hemY, legHalf: legHalf, taper: taper, isSkirt: isSkirt,
+      hem: pickBy((hemY - waistY) / Math.max(1, hipHalf * 2), HEM_RATIO_BOTTOM),
+      flare: isSkirt ? Math.max(1.0, (rows[Math.round(hemY)].w / 2) / hipHalf) : 1.25,
+      crotchDrop: HH * 0.06
+    };
+  }
+
 
   /* --- 사용자 옷 저장소 (IndexedDB) --------------------------------- */
   var DB_NAME = 'pc-wardrobe', STORE = 'items', _db = null, _userById = {};
@@ -6560,7 +6756,23 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     var im = ctx.createImageData(g.w, g.h);
     im.data.set(new Uint8ClampedArray(g.pixels));
     ctx.putImageData(im, 0, 0);
-    return { canvas: cv, anchors: g.anchors, geom: { cx: g.w / 2 }, material: MATERIALS[g.material] || MATERIALS.cotton };
+    /* geom 이 비어 있으면 buildParts 가 몸통 폭을 0으로 보고 옷본 전체를
+     * 한 열로 눌러 읽는다. 반입한 옷에도 옷본과 같은 geom 을 실어 준다.
+     * (예전 반입본은 geom 이 없으므로 여기서 다시 재어 채운다) */
+    var geom = g.geom;
+    if (!geom || geom.bodyHalf == null) {
+      var m = new Uint8Array(g.w * g.h);
+      for (var i = 0, q = 3; i < m.length; i++, q += 4) m[i] = g.pixels[q] > 8 ? 1 : 0;
+      var P2 = g.cat === 'bottom' ? measureBottom(m, g.w, g.h) : measureTop(m, g.w, g.h);
+      if (P2) {
+        var rebuilt = g.cat === 'bottom' ? bottomAnchorsOf(P2) : topAnchorsOf(P2);
+        geom = rebuilt.geom;
+        if (!g.anchors || !g.anchors.pitL) g.anchors = rebuilt.anchors;
+      } else {
+        geom = { cx: g.w / 2 };
+      }
+    }
+    return { canvas: cv, anchors: g.anchors, geom: geom, material: MATERIALS[g.material] || MATERIALS.cotton };
   }
 
   /**
@@ -6572,14 +6784,20 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     var cut = cutout(source, 560);
     if (cut.ratio < 0.03) throw new Error('옷을 배경에서 분리하지 못했습니다. 단색 배경의 상품 사진이 가장 잘 됩니다.');
     if (cut.ratio > 0.92) throw new Error('배경이 지워지지 않았습니다. 흰 배경 상품컷을 써 주세요.');
-    var anchors = estimateAnchors(cut.mask, cut.w, cut.h, meta.cat);
-    if (!anchors) throw new Error('옷의 형태를 읽지 못했습니다.');
+    var isBottom = meta.cat === 'bottom';
+    var P = isBottom ? measureBottom(cut.mask, cut.w, cut.h)
+                     : measureTop(cut.mask, cut.w, cut.h);
+    if (!P) throw new Error('옷의 형태를 읽지 못했습니다. 옷을 펼쳐 놓고 정면에서 찍은 사진이 가장 잘 됩니다.');
+    var built = isBottom ? bottomAnchorsOf(P) : topAnchorsOf(P);
     var px = cut.ctx.getImageData(0, 0, cut.w, cut.h).data;
     var item = {
       id: 'u-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e4).toString(36),
       ko: meta.ko || '내 옷', cat: meta.cat || 'top', style: meta.style || 'casual',
       material: meta.material || 'cotton', userPhoto: true,
-      w: cut.w, h: cut.h, anchors: anchors,
+      w: cut.w, h: cut.h, anchors: built.anchors, geom: built.geom,
+      // 소매·기장 종류는 피팅 쪽에서 쓴다(소매 조각을 만들지 말지 등)
+      sleeve: P.sleeve || null, hem: P.hem || null,
+      shape: P.isSkirt ? 'skirt' : (isBottom ? 'pants' : null),
       pixels: Array.prototype.slice.call(px),
       createdAt: Date.now()
     };
@@ -6615,7 +6833,9 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     CATALOG: CATALOG, STYLES: STYLES, CATS: CATS, MATERIALS: MATERIALS,
     NECK: NECK, W: BASE_W, H: BASE_H, HEM_Y: HEM_Y, HEM_Y_B: HEM_Y_B,
     all: all, forGender: forGender, byId: byId, get: get, invalidate: invalidate,
-    render: renderGarment, cutout: cutout, estimateAnchors: estimateAnchors,
+    render: renderGarment, cutout: cutout,
+    measureTop: measureTop, measureBottom: measureBottom,
+    topAnchorsOf: topAnchorsOf, bottomAnchorsOf: bottomAnchorsOf,
     thumb: thumb,
     importPhoto: importPhoto, saveUser: saveUser, listUser: listUser,
     removeUser: removeUser, registerUser: registerUser, userItems: userItems
