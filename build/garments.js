@@ -259,15 +259,27 @@
         [cx + waistHalf, waistY], [cx, waistY - H * .012]
       ];
     } else {
+      /* 밑단은 **수평선**이다.
+       * 예전에는 바깥 밑단과 안쪽 밑단의 높이를 다르게 두었는데, 곡선
+       * 보간(Catmull-Rom)이 그 사이를 둥글게 이어 바짓단이 양말 코처럼
+       * 말렸다. 그 둥근 끝 바깥에 원래 바지가 남아 발목에 검은 자국이
+       * 생겼다. 세 점을 같은 높이에 두어 접선을 수평으로 만든다. */
+      var legOut = legHalf * (g.taper == null ? 1.0 : g.taper) + legHalf * .25;
+      var legIn = legHalf * .35;
+      var legLift = H * .014;   // 밑단 모서리를 각지게 만드는 보조점
       pts = [
         [cx - waistHalf, waistY], [cx - hipHalf, hipY],
-        [cx - legHalf * (g.taper == null ? 1.0 : g.taper) - legHalf * .25, hemY],
-        [cx - legHalf * .35, hemY + H * .010],
+        [cx - legOut, hemY - legLift],
+        [cx - legOut, hemY],
+        [cx - legIn,  hemY],
+        [cx - legIn,  hemY - legLift],
         [cx - legHalf * .08, crotchY + H * .04],
         [cx, crotchY],
         [cx + legHalf * .08, crotchY + H * .04],
-        [cx + legHalf * .35, hemY + H * .010],
-        [cx + legHalf * (g.taper == null ? 1.0 : g.taper) + legHalf * .25, hemY],
+        [cx + legIn,  hemY - legLift],
+        [cx + legIn,  hemY],
+        [cx + legOut, hemY],
+        [cx + legOut, hemY - legLift],
         [cx + hipHalf, hipY], [cx + waistHalf, waistY], [cx, waistY - H * .012]
       ];
     }

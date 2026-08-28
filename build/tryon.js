@@ -1523,7 +1523,15 @@
         (bandTop === Infinity ? L.shoulder.y : bandTop),
         L.chinY + L.headH * 0.15
       ) - L.headH * 0.05));
-      var bot = Math.round(Math.min(h - 1, (bandBot === -Infinity ? L.hip.y : bandBot) + L.headH * 0.10));
+      /* 아래쪽 경계 — **발과 신발은 건드리지 않는다.**
+       * 밑단 조금 아래까지 지우는 것은 옷 경계의 자투리를 없애려는 것인데,
+       * 발목까지 오는 바지에서는 그 "조금 아래"가 이미 신발 자리다. 거기를
+       * 지우고 피부색으로 칠하니 신발 위에 살색 띠가 생겼다.
+       * 무릎 아래로 짧아진 바지(반바지·크롭)는 여전히 정강이를 지운다. */
+      var shoeTop = L.bottom - (L.bottom - L.hip.y) * 0.07;
+      var botRaw = (bandBot === -Infinity ? L.hip.y : bandBot) + L.headH * 0.10;
+      var bot = Math.round(Math.min(h - 1, botRaw,
+        Math.max(shoeTop, bandBot === -Infinity ? L.hip.y : bandBot)));
       for (var y = top; y <= bot; y++) {
         for (var x = 0; x < w; x++) {
           var p = y * w + x;
@@ -1540,10 +1548,28 @@
        * (나) 그 밖의 자투리 : 옷 경계의 틈. 여기는 무엇이 있어야 하는지 모른다.
        *      주변 색을 확산시킬 뿐이며, 넓어지면 티가 난다 — 그래서 면적을 보고한다. */
       var skinRGB = CC.labToRgb(body.skinLab.L, body.skinLab.a, body.skinLab.b);
+      /* 밝기의 기준은 **피부색을 잰 곳**이어야 한다.
+       * 몸 전체 평균으로 나누면 어두운 바지가 평균을 끌어내려, 밝은 자리에
+       * 칠한 피부가 실제 얼굴빛보다 환하게 떠 보인다 — 옷깃 안의 윗가슴이
+       * 목보다 밝게 나온 것이 그것이다. */
       var lsum = 0, ln = 0;
-      for (var s0 = 0; s0 < w * h; s0++) if (body.mask[s0]) { lsum += body.light[s0]; ln++; }
+      var fy0 = Math.max(0, L.headTop != null ? L.headTop : L.top);
+      var fy1 = Math.min(h - 1, L.chinY);
+      for (var fy = fy0; fy <= fy1; fy++) {
+        for (var fx = 0; fx < w; fx++) {
+          var fp = fy * w + fx;
+          if (body.skin[fp] && body.mask[fp]) { lsum += body.light[fp]; ln++; }
+        }
+      }
+      if (ln < 40) {                                  // 얼굴을 못 찾았으면 몸 전체로
+        lsum = 0; ln = 0;
+        for (var s0 = 0; s0 < w * h; s0++) if (body.mask[s0]) { lsum += body.light[s0]; ln++; }
+      }
       var lmeanB = ln ? lsum / ln : 128;
 
+      /* 옷깃이 드러낼 수 있는 높이의 한계 — 어깨에서 허리까지의 18% 아래로는
+       * 어떤 목선도 내려오지 않는다(깊은 브이넥도 여기까지다). */
+      var chestLine = L.shoulder.y + (L.waist.y - L.shoulder.y) * 0.18;
       var nSkin = 0, skinFilled = new Uint8Array(w * h);
       for (var y2 = top; y2 <= bot; y2++) {
         for (var x2 = 0; x2 < w; x2++) {
@@ -1553,7 +1579,17 @@
           var core = body.rows[y2];
           var outOfTorso = !core || core.cx0 < 0 || x2 < core.cx0 - 1 || x2 > core.cx1 + 1;
           var isArm = sleeveEnd != null && y2 > sleeveEnd + 2 && outOfTorso;
-          if (!isLeg && !isArm) continue;
+          /* (다) 새 옷의 목선이 원래 옷보다 얕으면 그 사이 **윗가슴**이 드러난다.
+           * 여기도 무엇이 있어야 하는지 안다 — 목에서 이어지는 피부다.
+           * 확산에 맡기면 옷깃 위로 살색이 번져 뿌연 얼룩이 됐다.
+           * 옷깃은 가운데에 있으므로 중심 가까이만 본다 — 어깨에 내려온
+           * 머리카락까지 피부로 칠하지 않기 위해서다. */
+          var isChest = false;
+          if (!isLeg && !isArm && y2 < chestLine && core && core.cx0 >= 0) {
+            var cxr = (core.cx0 + core.cx1) / 2;
+            isChest = Math.abs(x2 - cxr) < (core.cx1 - core.cx0) * 0.25;
+          }
+          if (!isLeg && !isArm && !isChest) continue;
           var lf2 = clamp(body.light[p2] / lmeanB, 0.68, 1.34);
           var i3 = p2 * 4;
           od[i3]     = clamp(skinRGB.r * lf2, 0, 255);
