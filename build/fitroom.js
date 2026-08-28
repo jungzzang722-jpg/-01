@@ -26,6 +26,11 @@
       { k: 'top', ko: '상의' }, { k: 'outer', ko: '아우터' },
       { k: 'bottom', ko: '하의' }, { k: 'dress', ko: '원피스' }
     ];
+    // 남성으로 설정하면 원피스 부위는 통째로 뺀다. 눌러도 빈 목록만 나오는
+    // 버튼을 남겨 두면 "성별을 무시했다"는 인상만 준다.
+    if (ctx.rec && ctx.rec.gender === 'male') {
+      cats = cats.filter(function (c) { return c.k !== 'dress'; });
+    }
     var styles = Object.keys(GARMENTS.STYLES);
 
     return '' +
@@ -151,7 +156,8 @@
       cat: 'top', style: '',
       ease: 1, lengthAdj: 0, shiftY: 0, lightAmount: 0.75, erase: true,
       wipe: 1, busy: false, pending: false,
-      views: [], viewIdx: 0, mv: (ctx.full && ctx.full.mv && ctx.full.mv.ok) ? ctx.full.mv : null
+      views: [], viewIdx: 0, mv: (ctx.full && ctx.full.mv && ctx.full.mv.ok) ? ctx.full.mv : null,
+      gender: (ctx.rec && ctx.rec.gender) || 'female'
     };
 
     /* 저장된 내 옷 복원 */
@@ -269,6 +275,7 @@
     if (!pal.length) return null;
     var gender = ctx.rec && ctx.rec.gender;
     var topId = gender === 'male' ? 't-shirt-oxford' : 't-crew-cotton';
+    if (!GARMENTS.forGender([GARMENTS.byId(topId)], gender).length) topId = 't-crew-cotton';
     return {
       top: { garmentId: topId, colorHex: pal[0].hex, colorKo: pal[0].ko },
       bottom: { garmentId: 'b-straight-denim', colorHex: (palB[0] || pal[0]).hex, colorKo: (palB[0] || pal[0]).ko }
@@ -418,7 +425,7 @@
    * ===================================================================== */
   function renderGrid() {
     var grid = S.root.querySelector('#fitGrid');
-    var items = GARMENTS.all().filter(function (g) {
+    var items = GARMENTS.forGender(GARMENTS.all(), S.gender).filter(function (g) {
       if (g.cat !== S.cat) return false;
       if (S.style && g.style !== S.style) return false;
       return true;

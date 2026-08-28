@@ -635,15 +635,15 @@
     G({ id: 't-turtle', ko: '터틀넥 니트', cat: 'top', style: 'classic', material: 'knit', baseHex: '#2F3440', neck: 'turtle', sleeve: 'long', hem: 'hip', fit: .94, details: ['rib', 'cuff'] }),
     G({ id: 't-shirt-oxford', ko: '옥스퍼드 셔츠', cat: 'top', style: 'classic', material: 'cotton', baseHex: '#DCE4EC', neck: 'shirt', sleeve: 'long', hem: 'hip', fit: 1.06, details: ['button', 'cuff', 'pocket'] }),
     G({ id: 't-shirt-linen', ko: '린넨 셔츠', cat: 'top', style: 'casual', material: 'linen', baseHex: '#EFE7D6', neck: 'shirt', sleeve: 'threeq', hem: 'hip', fit: 1.10, details: ['button'] }),
-    G({ id: 't-blouse-silk', ko: '실크 블라우스', cat: 'top', style: 'romantic', material: 'silk', baseHex: '#F2D9DC', neck: 'v', sleeve: 'long', hem: 'hip', fit: 1.08, details: ['button'] }),
-    G({ id: 't-boat-fine', ko: '보트넥 얇은 니트', cat: 'top', style: 'chic', material: 'knit', baseHex: '#8E92A8', neck: 'boat', sleeve: 'threeq', hem: 'waist', fit: .96, details: ['rib'] }),
-    G({ id: 't-square-crop', ko: '스퀘어넥 크롭탑', cat: 'top', style: 'romantic', material: 'jersey', baseHex: '#E9C7B4', neck: 'square', sleeve: 'cap', hem: 'crop', fit: .92, details: [] }),
+    G({ id: 't-blouse-silk', g: 'f', ko: '실크 블라우스', cat: 'top', style: 'romantic', material: 'silk', baseHex: '#F2D9DC', neck: 'v', sleeve: 'long', hem: 'hip', fit: 1.08, details: ['button'] }),
+    G({ id: 't-boat-fine', g: 'f', ko: '보트넥 얇은 니트', cat: 'top', style: 'chic', material: 'knit', baseHex: '#8E92A8', neck: 'boat', sleeve: 'threeq', hem: 'waist', fit: .96, details: ['rib'] }),
+    G({ id: 't-square-crop', g: 'f', ko: '스퀘어넥 크롭탑', cat: 'top', style: 'romantic', material: 'jersey', baseHex: '#E9C7B4', neck: 'square', sleeve: 'cap', hem: 'crop', fit: .92, details: [] }),
     G({ id: 't-sweat', ko: '스웨트셔츠', cat: 'top', style: 'casual', material: 'cotton', baseHex: '#A9AFA4', neck: 'crew', sleeve: 'long', hem: 'hip', fit: 1.16, details: ['rib', 'cuff'] }),
     G({ id: 't-hoodie-big', ko: '오버핏 후디', cat: 'top', style: 'street', material: 'cotton', baseHex: '#4A4A50', neck: 'crew', sleeve: 'long', hem: 'thigh', fit: 1.30, shoulderHalf: .335, details: ['rib', 'cuff', 'pocket'] }),
-    G({ id: 't-tank-rib', ko: '리브 슬리브리스', cat: 'top', style: 'minimal', material: 'knit', baseHex: '#D8D3CC', neck: 'square', sleeve: 'none', hem: 'hip', fit: .90, details: ['rib'] }),
+    G({ id: 't-tank-rib', g: 'f', ko: '리브 슬리브리스', cat: 'top', style: 'minimal', material: 'knit', baseHex: '#D8D3CC', neck: 'square', sleeve: 'none', hem: 'hip', fit: .90, details: ['rib'] }),
     G({ id: 't-polo', ko: '피케 폴로', cat: 'top', style: 'classic', material: 'cotton', baseHex: '#2C4A5E', neck: 'shirt', sleeve: 'short', hem: 'hip', fit: 1.02, details: ['button'] }),
     G({ id: 't-tech-zip', ko: '집업 트레이닝 탑', cat: 'top', style: 'sporty', material: 'tech', baseHex: '#20304A', neck: 'turtle', sleeve: 'long', hem: 'hip', fit: 1.06, details: ['zip', 'rib', 'cuff'] }),
-    G({ id: 't-deepv-drape', ko: '드레이프 브이넥', cat: 'top', style: 'chic', material: 'silk', baseHex: '#3A3540', neck: 'deepv', sleeve: 'long', hem: 'hip', fit: 1.10, details: [] }),
+    G({ id: 't-deepv-drape', g: 'f', ko: '드레이프 브이넥', cat: 'top', style: 'chic', material: 'silk', baseHex: '#3A3540', neck: 'deepv', sleeve: 'long', hem: 'hip', fit: 1.10, details: [] }),
     G({ id: 't-cable', ko: '케이블 니트', cat: 'top', style: 'classic', material: 'knit', baseHex: '#E4DCC8', neck: 'crew', sleeve: 'long', hem: 'hip', fit: 1.14, details: ['rib', 'cuff'] }),
 
     /* ---------- 아우터 ---------- */
@@ -654,7 +654,7 @@
     G({ id: 'o-denim-jk', ko: '데님 재킷', cat: 'outer', style: 'casual', material: 'denim', baseHex: '#4E6E96', neck: 'shirt', sleeve: 'long', hem: 'waist', fit: 1.12, details: ['button', 'pocket', 'cuff'] }),
     G({ id: 'o-leather-rider', ko: '레더 라이더 재킷', cat: 'outer', style: 'chic', material: 'leather', baseHex: '#26262A', neck: 'deepv', sleeve: 'long', hem: 'waist', fit: 1.06, details: ['zip', 'pocket'] }),
     G({ id: 'o-coat-wool', ko: '싱글 울코트', cat: 'outer', style: 'classic', material: 'wool', baseHex: '#43403C', neck: 'deepv', sleeve: 'long', hem: 'knee', fit: 1.24, details: ['button', 'pocket'] }),
-    G({ id: 'o-tweed-jk', ko: '트위드 재킷', cat: 'outer', style: 'office', material: 'tweed', baseHex: '#C9BCB2', neck: 'crew', sleeve: 'long', hem: 'hip', fit: 1.08, details: ['button', 'pocket'] }),
+    G({ id: 'o-tweed-jk', g: 'f', ko: '트위드 재킷', cat: 'outer', style: 'office', material: 'tweed', baseHex: '#C9BCB2', neck: 'crew', sleeve: 'long', hem: 'hip', fit: 1.08, details: ['button', 'pocket'] }),
     G({ id: 'o-windbreak', ko: '윈드브레이커', cat: 'outer', style: 'sporty', material: 'tech', baseHex: '#1F5F52', neck: 'turtle', sleeve: 'long', hem: 'hip', fit: 1.26, details: ['zip', 'pocket', 'rib'] }),
     G({ id: 'o-shirt-jk', ko: '셔츠 재킷', cat: 'outer', style: 'street', material: 'wool', baseHex: '#6E7B6A', neck: 'shirt', sleeve: 'long', hem: 'thigh', fit: 1.24, details: ['button', 'pocket'] }),
 
@@ -667,17 +667,17 @@
     G({ id: 'b-chino', ko: '치노 팬츠', cat: 'bottom', shape: 'pants', style: 'classic', material: 'cotton', baseHex: '#B8A588', hem: 'ankle', fit: 1.00, legHalf: .118, taper: .90, details: ['pocket'] }),
     G({ id: 'b-cord', ko: '코듀로이 팬츠', cat: 'bottom', shape: 'pants', style: 'classic', material: 'corduroy', baseHex: '#7A5C42', hem: 'ankle', fit: 1.04, legHalf: .128, taper: .95, details: ['pocket'] }),
     G({ id: 'b-jogger', ko: '조거 팬츠', cat: 'bottom', shape: 'pants', style: 'sporty', material: 'tech', baseHex: '#33383D', hem: 'ankle', fit: 1.06, legHalf: .118, taper: .72, details: ['pocket'] }),
-    G({ id: 'b-aline-skirt', ko: 'A라인 스커트', cat: 'bottom', shape: 'skirt', style: 'romantic', material: 'cotton', baseHex: '#C2A9B8', hem: 'knee', fit: 1.00, flare: 1.35, details: [] }),
-    G({ id: 'b-pencil-skirt', ko: '펜슬 스커트', cat: 'bottom', shape: 'skirt', style: 'office', material: 'wool', baseHex: '#3A3B42', hem: 'knee', fit: .96, flare: 1.02, details: [] }),
-    G({ id: 'b-pleats-skirt', ko: '플리츠 스커트', cat: 'bottom', shape: 'skirt', style: 'chic', material: 'silk', baseHex: '#7A8B7E', hem: 'knee', fit: 1.02, flare: 1.42, details: [] }),
-    G({ id: 'b-denim-skirt', ko: '데님 스커트', cat: 'bottom', shape: 'skirt', style: 'casual', material: 'denim', baseHex: '#5B7CA6', hem: 'thigh', fit: 1.00, flare: 1.12, details: ['pocket'] }),
+    G({ id: 'b-aline-skirt', g: 'f', ko: 'A라인 스커트', cat: 'bottom', shape: 'skirt', style: 'romantic', material: 'cotton', baseHex: '#C2A9B8', hem: 'knee', fit: 1.00, flare: 1.35, details: [] }),
+    G({ id: 'b-pencil-skirt', g: 'f', ko: '펜슬 스커트', cat: 'bottom', shape: 'skirt', style: 'office', material: 'wool', baseHex: '#3A3B42', hem: 'knee', fit: .96, flare: 1.02, details: [] }),
+    G({ id: 'b-pleats-skirt', g: 'f', ko: '플리츠 스커트', cat: 'bottom', shape: 'skirt', style: 'chic', material: 'silk', baseHex: '#7A8B7E', hem: 'knee', fit: 1.02, flare: 1.42, details: [] }),
+    G({ id: 'b-denim-skirt', g: 'f', ko: '데님 스커트', cat: 'bottom', shape: 'skirt', style: 'casual', material: 'denim', baseHex: '#5B7CA6', hem: 'thigh', fit: 1.00, flare: 1.12, details: ['pocket'] }),
 
     /* ---------- 원피스 ---------- */
-    G({ id: 'd-shirt-dress', ko: '셔츠 원피스', cat: 'dress', style: 'casual', material: 'cotton', baseHex: '#B7C4CC', neck: 'shirt', sleeve: 'long', hem: 'knee', fit: 1.10, hemOut: 1.28, details: ['button', 'pocket'] }),
-    G({ id: 'd-slip', ko: '슬립 원피스', cat: 'dress', style: 'chic', material: 'silk', baseHex: '#4B4550', neck: 'square', sleeve: 'none', hem: 'knee', fit: .96, hemOut: 1.12, details: [] }),
-    G({ id: 'd-knit-dress', ko: '니트 원피스', cat: 'dress', style: 'minimal', material: 'knit', baseHex: '#9C8F80', neck: 'turtle', sleeve: 'long', hem: 'knee', fit: 1.00, hemOut: 1.05, details: ['rib', 'cuff'] }),
-    G({ id: 'd-flare', ko: '플레어 원피스', cat: 'dress', style: 'romantic', material: 'linen', baseHex: '#E6D2C0', neck: 'v', sleeve: 'short', hem: 'knee', fit: 1.02, waistIn: .82, hemOut: 1.55, details: [] }),
-    G({ id: 'd-sheath', ko: '시스 원피스', cat: 'dress', style: 'office', material: 'wool', baseHex: '#33404C', neck: 'boat', sleeve: 'short', hem: 'knee', fit: .96, waistIn: .88, hemOut: 1.02, details: [] })
+    G({ id: 'd-shirt-dress', g: 'f', ko: '셔츠 원피스', cat: 'dress', style: 'casual', material: 'cotton', baseHex: '#B7C4CC', neck: 'shirt', sleeve: 'long', hem: 'knee', fit: 1.10, hemOut: 1.28, details: ['button', 'pocket'] }),
+    G({ id: 'd-slip', g: 'f', ko: '슬립 원피스', cat: 'dress', style: 'chic', material: 'silk', baseHex: '#4B4550', neck: 'square', sleeve: 'none', hem: 'knee', fit: .96, hemOut: 1.12, details: [] }),
+    G({ id: 'd-knit-dress', g: 'f', ko: '니트 원피스', cat: 'dress', style: 'minimal', material: 'knit', baseHex: '#9C8F80', neck: 'turtle', sleeve: 'long', hem: 'knee', fit: 1.00, hemOut: 1.05, details: ['rib', 'cuff'] }),
+    G({ id: 'd-flare', g: 'f', ko: '플레어 원피스', cat: 'dress', style: 'romantic', material: 'linen', baseHex: '#E6D2C0', neck: 'v', sleeve: 'short', hem: 'knee', fit: 1.02, waistIn: .82, hemOut: 1.55, details: [] }),
+    G({ id: 'd-sheath', g: 'f', ko: '시스 원피스', cat: 'dress', style: 'office', material: 'wool', baseHex: '#33404C', neck: 'boat', sleeve: 'short', hem: 'knee', fit: .96, waistIn: .88, hemOut: 1.02, details: [] })
   ];
 
   var BY_ID = {};
@@ -951,12 +951,26 @@
   }
 
   function all() { return CATALOG.concat(userItems()); }
+
+  /**
+   * 성별에 맞는 옷만 남긴다.
+   *
+   * 태그는 g:'f'(여성 전용) 하나뿐이고 나머지는 공용이다. 남성 전용을 따로
+   * 두지 않은 이유는, 이 카탈로그에서 남성만 입는 아이템이 실제로 없기
+   * 때문이다 — 없는 구분을 만들면 여성 사용자에게서 셔츠·슬랙스를 빼앗는다.
+   * '구분 없이'를 고른 사용자에게는 전부 보여준다.
+   */
+  function forGender(list, gender) {
+    if (gender !== 'male') return list;
+    // 사용자가 직접 넣은 옷은 거르지 않는다 — 본인이 가진 옷이다
+    return list.filter(function (g) { return g && (g.userPhoto || g.g !== 'f'); });
+  }
   function byId(id) { return BY_ID[id] || _userById[id] || null; }
 
   global.GARMENTS = {
     CATALOG: CATALOG, STYLES: STYLES, CATS: CATS, MATERIALS: MATERIALS,
     NECK: NECK, W: BASE_W, H: BASE_H, HEM_Y: HEM_Y, HEM_Y_B: HEM_Y_B,
-    all: all, byId: byId, get: get, invalidate: invalidate,
+    all: all, forGender: forGender, byId: byId, get: get, invalidate: invalidate,
     render: renderGarment, cutout: cutout, estimateAnchors: estimateAnchors,
     thumb: thumb,
     importPhoto: importPhoto, saveUser: saveUser, listUser: listUser,
