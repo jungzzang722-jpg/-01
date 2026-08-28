@@ -44,7 +44,8 @@ const r = await page.evaluate(() => {
     // 바지 — 실제 바지처럼 **한 덩어리**로 그리고 가랑이만 파낸다.
     // 예전 픽스처는 다리 두 짝을 따로 그려 엉덩이 부분이 비어 있었고,
     // 그래서 가랑이가 실제보다 한참 위로 잡혔다.
-    const crotchY = hipY + bodyH*0.135;
+    // 실제 인체에서 가랑이는 골반선 바로 아래다 (신장의 약 6%).
+    const crotchY = hipY + bodyH*0.068;
     c.fillStyle=shade(c, PANT, cx-hipHalf,hipY, cx+hipHalf,footY, PANT_D);
     c.beginPath();
     c.moveTo(cx-hipHalf, hipY);
@@ -58,16 +59,18 @@ const r = await page.evaluate(() => {
     c.lineTo(cx+hipHalf, hipY);
     c.closePath(); c.fill();
 
-    // 팔 — 몸에 거의 붙어 있다 (사용자 사진처럼)
+    // 팔 — 몸에 거의 붙어 있다 (사용자 사진처럼).
+    // 팔의 바깥선은 어깨선 **안쪽**이다. 바깥으로 나가게 그리면 소매가
+    // 팔을 덮을 수 없는 몸이 되어, 실제 사진에 없는 상황으로 시험하게 된다.
     const armW=bodyH*0.042;
     [-1,1].forEach(s=>{
-      const x0=cx+s*(shHalf+armW*0.15);
-      c.fillStyle=shade(c, SKIN, x0-armW,shY, x0+armW,hipY, SKIN_D);
+      const outT=cx+s*shHalf*0.97, outB=cx+s*shHalf*0.88;
+      c.fillStyle=shade(c, SKIN, outT-armW,shY, outT+armW,hipY, SKIN_D);
       c.beginPath();
-      c.moveTo(x0-s*armW*0.5, shY+bodyH*0.02);
-      c.lineTo(x0+s*armW*0.9, shY+bodyH*0.03);
-      c.lineTo(x0+s*armW*0.7, hipY+bodyH*0.045);
-      c.lineTo(x0-s*armW*0.35, hipY+bodyH*0.04);
+      c.moveTo(outT,               shY+bodyH*0.02);
+      c.lineTo(outT-s*armW,        shY+bodyH*0.03);
+      c.lineTo(outB-s*armW*0.86,   hipY+bodyH*0.045);
+      c.lineTo(outB,               hipY+bodyH*0.04);
       c.closePath(); c.fill();
     });
 
@@ -77,12 +80,12 @@ const r = await page.evaluate(() => {
     c.moveTo(cx-shHalf*0.42, shY-bodyH*0.004);
     c.lineTo(cx-shHalf, shY+bodyH*0.008);
     c.lineTo(cx-shHalf*1.02, shY+bodyH*0.115);      // 반팔 소매 끝
-    c.lineTo(cx-shHalf*0.80, shY+bodyH*0.125);
+    c.lineTo(cx-shHalf*0.88, shY+bodyH*0.125);      // 겨드랑이 — 허리보다 넓다
     c.lineTo(cx-waistHalf, waistY);
     c.lineTo(cx-hipHalf*0.97, hipY+bodyH*0.012);
     c.lineTo(cx+hipHalf*0.97, hipY+bodyH*0.012);
     c.lineTo(cx+waistHalf, waistY);
-    c.lineTo(cx+shHalf*0.80, shY+bodyH*0.125);
+    c.lineTo(cx+shHalf*0.88, shY+bodyH*0.125);
     c.lineTo(cx+shHalf*1.02, shY+bodyH*0.115);
     c.lineTo(cx+shHalf, shY+bodyH*0.008);
     c.lineTo(cx+shHalf*0.42, shY-bodyH*0.004);

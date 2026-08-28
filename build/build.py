@@ -32,7 +32,7 @@ must("\n</style>", (B / 'fitroom.css').read_text(encoding='utf-8') + "\n</style>
 # ── 2. 엔진 3종 : recommend.js 앞 (CC·DETECT·BODY 뒤여야 한다) ───────────
 engines = "".join(
     "<script>\n" + (B / f).read_text(encoding='utf-8').rstrip() + "\n</script>\n"
-    for f in ('garments.js', 'recolor.js', 'tryon.js', 'multiview.js')
+    for f in ('segment.js', 'garments.js', 'recolor.js', 'tryon.js', 'multiview.js')
 )
 A_REC = "<script>\n/* =========================================================================\n * recommend.js"
 must(A_REC, engines + A_REC, 'engines')

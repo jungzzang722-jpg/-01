@@ -308,53 +308,95 @@
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(source && source.width ? source : bodyRes.work.canvas, 0, 0, w, h);
 
-    /* ── 마스크 확대 ──
-     * 640px에서 잡은 마스크를 900px로 늘린다. 최근접으로 늘리면 경계가
-     * 계단이 되고, 옷의 알파가 그 계단을 그대로 물려받아 **가장자리가
-     * 톱니처럼 튄다**. 확대한 뒤 형태학적으로 닫아도 계단은 그대로다
-     * (닫기는 구멍을 메울 뿐 반화소를 만들지 못한다).
-     *
-     * 그래서 두 가지를 함께 만든다.
-     *   mask : 판정용 0/1 마스크 (어디까지가 사람인가)
-     *   edge : 합성용 0~1 부드러운 커버리지 (경계에서 서서히 0이 된다)
-     * 옷의 알파에 edge 를 곱하면 실루엣 가장자리가 반화소로 녹아든다. */
-    var mask = new Uint8Array(w * h);
-    var edge = new Float32Array(w * h);
-    for (var y = 0; y < h; y++) {
-      var fy = clamp(y / scale - 0.5, 0, sh - 1);
-      var y0 = fy | 0, y1 = Math.min(sh - 1, y0 + 1), ty = fy - y0;
-      for (var x = 0; x < w; x++) {
-        var fx = clamp(x / scale - 0.5, 0, sw - 1);
-        var x0 = fx | 0, x1 = Math.min(sw - 1, x0 + 1), tx = fx - x0;
-        var m00 = bodyRes.mask[y0 * sw + x0], m10 = bodyRes.mask[y0 * sw + x1];
-        var m01 = bodyRes.mask[y1 * sw + x0], m11 = bodyRes.mask[y1 * sw + x1];
-        var v = (m00 * (1 - tx) + m10 * tx) * (1 - ty) + (m01 * (1 - tx) + m11 * tx) * ty;
-        var p0 = y * w + x;
-        mask[p0] = v >= 0.5 ? 1 : 0;
-        // 0.5 근처만 부드럽게. 안쪽은 1, 바깥은 0 으로 확실히 눌러 둔다.
-        edge[p0] = v <= 0.22 ? 0 : v >= 0.72 ? 1 : (v - 0.22) / 0.50;
-      }
-    }
-    mask = DETECT.morph(DETECT.morph(mask, w, h, 'dilate', 1), w, h, 'erode', 1);
+    /* ── 인물 분리 ──
+     * 640px 마스크를 늘려 쓰지 않고 **합성할 해상도에서 직접** 다시 나눈다.
+     * 늘려 쓰면 (1) 경계가 계단이 되고 (2) 640px에서 놓친 구멍을 그대로
+     * 물려받는다. segment.js 는 행별 배경 모델 + 적응 임계 + 연결성으로
+     * 나누고, 인물 안쪽의 구멍을 메워 준다 — 흰 셔츠가 흰 벽과 같은 색이라
+     * 배경으로 빠져도 되살아난다.
+     * 실패하면 body.js 의 마스크를 늘려 쓰는 예전 방식으로 되돌린다. */
+    var img0 = ctx.getImageData(0, 0, w, h);
+    var seg = null;
+    try { seg = SEGMENT.person(img0, w, h); } catch (e) { seg = null; }
 
-    var img = ctx.getImageData(0, 0, w, h);
+    var mask, edge, segInfo = null;
+    if (seg && seg.ok) {
+      mask = seg.mask;
+      edge = seg.alpha;
+      segInfo = {
+        from: 'segment', separability: seg.separability, thr: seg.thr,
+        fgRatio: seg.fgRatio, holeRatio: seg.holeRatio, issues: seg.issues
+      };
+    } else {
+      mask = new Uint8Array(w * h);
+      edge = new Float32Array(w * h);
+      for (var y = 0; y < h; y++) {
+        var fy = clamp(y / scale - 0.5, 0, sh - 1);
+        var y0 = fy | 0, y1 = Math.min(sh - 1, y0 + 1), ty = fy - y0;
+        for (var x = 0; x < w; x++) {
+          var fx = clamp(x / scale - 0.5, 0, sw - 1);
+          var x0 = fx | 0, x1 = Math.min(sw - 1, x0 + 1), tx = fx - x0;
+          var m00 = bodyRes.mask[y0 * sw + x0], m10 = bodyRes.mask[y0 * sw + x1];
+          var m01 = bodyRes.mask[y1 * sw + x0], m11 = bodyRes.mask[y1 * sw + x1];
+          var v = (m00 * (1 - tx) + m10 * tx) * (1 - ty) + (m01 * (1 - tx) + m11 * tx) * ty;
+          var p0 = y * w + x;
+          mask[p0] = v >= 0.5 ? 1 : 0;
+          edge[p0] = v <= 0.22 ? 0 : v >= 0.72 ? 1 : (v - 0.22) / 0.50;
+        }
+      }
+      mask = DETECT.morph(DETECT.morph(mask, w, h, 'dilate', 1), w, h, 'erode', 1);
+      segInfo = {
+        from: 'body.js(대체)',
+        issues: [{ level: 'warn', ko: '인물 분리에 실패해 낮은 해상도의 예전 마스크를 썼습니다. 경계가 거칠 수 있습니다.' }]
+      };
+    }
+
+    var img = img0;
     var skin = DETECT.skinMask(img, w, h).mask;
 
-    /* 행별 스팬 — 몸통(core)과 팔 포함(full)을 따로 둔다 */
+    /* ── 행별 스팬 ──────────────────────────────────────────────────
+     * 세 가지를 따로 둔다.
+     *   x0/x1   : 실루엣 전체(팔·손 포함)
+     *   cx0/cx1 : 가장 긴 전경 구간 — 팔이 몸에서 떨어져 있을 때의 몸통
+     *   tx0/tx1 : 가장 긴 **옷 구간**(전경이면서 피부가 아닌 곳)
+     *
+     * tx 가 필요해진 이유가 있다. 인물 분리를 고치자 팔이 몸통과 한 덩어리로
+     * 잡히기 시작했고, 그러자 "가장 긴 구간"이 팔까지 삼켰다. 그 폭으로
+     * 바지 허리를 재니 청바지가 **팔뚝에까지** 칠해졌다.
+     * 반팔이면 팔은 맨살이고 몸통은 옷이므로, 피부를 뺀 최장 구간이 곧
+     * 몸통이다. 긴팔이면 팔도 옷이라 함께 잡히는데 그때는 소매가 팔을
+     * 덮는 것이 맞다. 옷이 안 보이는 행(맨살 다리, 반바지 아래)에서는
+     * 구간이 짧아지므로 cx 로 되돌린다. */
     var rows = [];
     for (var y2 = 0; y2 < h; y2++) {
       var a = -1, b = -1, run = -1, bestRun = 0, bx0 = -1, bx1 = -1;
+      var trun = -1, tBest = 0, tx0 = -1, tx1 = -1;
       for (var x2 = 0; x2 < w; x2++) {
-        if (mask[y2 * w + x2]) {
+        var q2 = y2 * w + x2;
+        if (mask[q2]) {
           if (a < 0) a = x2; b = x2;
           if (run < 0) run = x2;
-        } else if (run >= 0) {
-          if (x2 - run > bestRun) { bestRun = x2 - run; bx0 = run; bx1 = x2 - 1; }
-          run = -1;
+          if (!skin[q2]) { if (trun < 0) trun = x2; }
+          else if (trun >= 0) {
+            if (x2 - trun > tBest) { tBest = x2 - trun; tx0 = trun; tx1 = x2 - 1; }
+            trun = -1;
+          }
+        } else {
+          if (run >= 0) {
+            if (x2 - run > bestRun) { bestRun = x2 - run; bx0 = run; bx1 = x2 - 1; }
+            run = -1;
+          }
+          if (trun >= 0) {
+            if (x2 - trun > tBest) { tBest = x2 - trun; tx0 = trun; tx1 = x2 - 1; }
+            trun = -1;
+          }
         }
       }
       if (run >= 0 && w - run > bestRun) { bestRun = w - run; bx0 = run; bx1 = w - 1; }
-      rows.push({ x0: a, x1: b, cx0: bx0, cx1: bx1 });
+      if (trun >= 0 && w - trun > tBest) { tBest = w - trun; tx0 = trun; tx1 = w - 1; }
+      // 옷 구간이 몸통 구간의 40%도 안 되면 옷을 못 찾은 것이다
+      if (!(tBest >= (bestRun || 1) * 0.40)) { tx0 = -1; tx1 = -1; }
+      rows.push({ x0: a, x1: b, cx0: bx0, cx1: bx1, tx0: tx0, tx1: tx1 });
     }
 
     /* ── 랜드마크 ──
@@ -370,7 +412,7 @@
     });
 
     var sil = null;
-    try { sil = silhouetteLM(rows, mask, w, h); } catch (e) { sil = null; }
+    try { sil = silhouetteLM(rows, mask, skin, w, h); } catch (e) { sil = null; }
     if (sil) {
       sil.headTop = sil.top;
       lm = sil;
@@ -395,7 +437,8 @@
 
     return {
       canvas: cv, ctx: ctx, w: w, h: h, image: img,
-      mask: mask, edge: edge, skin: skin, rows: rows, lm: lm, lmSource: lmSource, light: light,
+      mask: mask, edge: edge, seg: segInfo,
+      skin: skin, rows: rows, lm: lm, lmSource: lmSource, light: light,
       scale: scale, skinLab: skinLab, source: bodyRes
     };
   }
@@ -425,7 +468,10 @@
     var a = [], b = [];
     for (var k = -win; k <= win; k++) {
       var rr = body.rows[clamp(r + k, 0, h - 1)];
-      var x0 = core ? rr.cx0 : rr.x0, x1 = core ? rr.cx1 : rr.x1;
+      /* 몸통을 물으면 **옷 구간**을 먼저 준다(rows 주석 참고).
+       * 팔이 몸통에 붙어 보여도 몸통 폭이 팔만큼 부풀지 않는다. */
+      var x0 = core ? (rr.tx0 >= 0 ? rr.tx0 : rr.cx0) : rr.x0;
+      var x1 = core ? (rr.tx0 >= 0 ? rr.tx1 : rr.cx1) : rr.x1;
       if (x0 >= 0) { a.push(x0); b.push(x1); }
     }
     if (!a.length) {
@@ -455,6 +501,18 @@
   /** 소매 끝 — 팔꿈치는 허리 높이, 손목은 골반 아래 28% 지점 */
   function elbowY(L) { return L.waist.y; }
   function wristY(L) { return L.hip.y + (L.bottom - L.hip.y) * 0.28; }
+
+  /* ── 소매 길이는 **팔 길이의 비율**로 잡는다 ──────────────────────────
+   * 예전에는 옷본의 소맷부리 높이를 어깨~밑단에 선형 대응시켜 옮겼다.
+   * 그러면 밑단이 조금만 어긋나도 소매가 통째로 밀린다 — 밑단이 50px
+   * 내려가자 반팔 소맷부리가 팔꿈치 아래까지 내려갔다.
+   *
+   * 소매 길이는 옷의 기장이 아니라 **팔**이 정하는 값이다. 어깨에서
+   * 손목까지를 1로 놓으면 사람마다 거의 같은 비율에 떨어진다.
+   *   캡 0.12 · 반팔 0.28(위팔 중간쯤) · 7부 0.75 · 긴팔 1.0
+   * 위팔(어깨~팔꿈치)이 팔 전체의 약 0.48이므로 반팔 0.28은 위팔의 60%
+   * 지점 — 실제 반팔이 끝나는 곳이다. */
+  var SLEEVE_FRAC = { none: 0.12, cap: 0.12, short: 0.28, threeq: 0.75, long: 1.0 };
   var SLEEVE_BODY = {
     none:   function (L) { return L.shoulder.y + (L.waist.y - L.shoulder.y) * 0.30; },
     cap:    function (L) { return L.shoulder.y + (L.waist.y - L.shoulder.y) * 0.30; },
@@ -474,19 +532,31 @@
     if (body._arm) return body._arm;
     var L = body._lmSane || (body._lmSane = saneLM(body.lm));
     var w = body.w, h = body.h, gap = Math.max(2, w * 0.014);
-    var lastL = -1, lastR = -1;
-    for (var y = Math.max(0, L.shoulder.y); y < Math.min(h, L.bottom); y++) {
+    var lastL = -1, lastR = -1, sep = false;
+    /* 가랑이 아래는 보지 않는다. 두 다리가 있는 행은 실루엣이 두 조각이라
+     * "팔이 몸에서 떨어져 있다"는 신호와 구별되지 않는다 — 그 탓에 팔이
+     * 발목까지 이어진 것으로 읽혀 반팔 소매가 종아리까지 내려갔다. */
+    var scanTo = Math.min(h, L.crotchY > 0 ? L.crotchY - h * 0.005
+                                             : L.hip.y + (L.bottom - L.hip.y) * 0.42);
+    for (var y = Math.max(0, L.shoulder.y); y < scanTo; y++) {
       var r = body.rows[y];
       if (!r || r.cx0 < 0) continue;
-      if (r.cx0 - r.x0 > gap) lastL = y;
-      if (r.x1 - r.cx1 > gap) lastR = y;
+      /* 팔이 몸에서 떨어져 있으면 실루엣 바깥쪽 조각이 팔이고,
+       * 붙어 있으면 옷 구간(tx) 바깥의 맨살이 팔이다. 두 경우를 모두 본다 —
+       * 떨어진 경우만 세면 팔을 몸에 붙이고 선 사진에서 팔이 "없는" 것이
+       * 되어, 소매 끝이 해부학 추정값(골반 아래)까지 내려갔다. */
+      if (r.cx0 - r.x0 > gap) { lastL = y; sep = true; }
+      else if (r.tx0 >= 0 && r.tx0 - r.cx0 > gap) lastL = y;
+      if (r.x1 - r.cx1 > gap) { lastR = y; sep = true; }
+      else if (r.tx1 >= 0 && r.cx1 - r.tx1 > gap) lastR = y;
     }
     var anat = wristY(L);
     var end;
-    if (lastL < 0 && lastR < 0) end = anat;                 // 팔이 몸에 붙어 있다
+    if (lastL < 0 && lastR < 0) end = anat;                 // 팔을 못 찾았다
     else end = Math.min(lastL < 0 ? 1e9 : lastL, lastR < 0 ? 1e9 : lastR);
     body._arm = {
-      separated: lastL >= 0 || lastR >= 0,
+      separated: sep,
+      found: lastL >= 0 || lastR >= 0,
       endY: clamp(end, L.shoulder.y + h * 0.04, L.bottom),
       anatomicalWrist: anat
     };
@@ -514,7 +584,7 @@
    * 이 변화는 얼굴을 찾지 않아도 읽힌다. 피부색·조명·머리 길이에 흔들리지도
    * 않는다. 실패하면(누워 있거나 실루엣이 깨졌으면) 기존 값으로 되돌린다.
    * ===================================================================== */
-  function silhouetteLM(rows, mask, w, h) {
+  function silhouetteLM(rows, mask, skin, w, h) {
     var top = 0; while (top < h && (!rows[top] || rows[top].cx0 < 0)) top++;
     var bot = h - 1; while (bot > top && (!rows[bot] || rows[bot].cx0 < 0)) bot--;
     var H = bot - top;
@@ -527,16 +597,40 @@
     }
     var sm = medianSmooth(raw, top, bot, Math.max(2, Math.round(H * 0.012)));
 
-    function argmin(a, b) {
+    /* ── 몸통 폭은 **옷 입은 부분**에서 잰다 ──────────────────────────
+     * 팔이 몸통에 붙어 보이면 실루엣 폭에 팔 두께가 더해진다. 그 값으로
+     * 옷을 재단하면 반팔 티셔츠가 팔까지 덮어 판초처럼 된다.
+     *
+     * 그런데 반팔을 입은 사람은 **팔이 맨살이고 몸통은 옷**이다.
+     * 피부가 아닌 전경의 최장 구간을 재면 팔이 저절로 빠진다.
+     * 긴팔을 입었으면 팔도 옷이라 함께 잡히는데, 그때는 긴팔 옷이
+     * 팔을 덮는 것이 맞으므로 문제가 되지 않는다.
+     * 상의를 벗고 있으면 옷 구간이 없으므로 실루엣 폭으로 되돌린다. */
+    var rawT = new Float32Array(h);
+    for (var y2 = top; y2 <= bot; y2++) {
+      var bestRun = 0, run = 0;
+      for (var x2 = 0; x2 < w; x2++) {
+        var q2 = y2 * w + x2;
+        if (mask[q2] && !(skin && skin[q2])) { run++; if (run > bestRun) bestRun = run; }
+        else run = 0;
+      }
+      // 옷 구간이 실루엣의 40%도 안 되면 옷을 못 찾은 것이다
+      rawT[y2] = bestRun >= raw[y2] * 0.40 ? bestRun : raw[y2];
+    }
+    var smT = medianSmooth(rawT, top, bot, Math.max(2, Math.round(H * 0.016)));
+
+    function argmin(a, b, prof) {
+      prof = prof || sm;
       a = Math.max(top, Math.round(a)); b = Math.min(bot, Math.round(b));
       var bi = a, bv = 1e9;
-      for (var y = a; y <= b; y++) if (sm[y] > 2 && sm[y] < bv) { bv = sm[y]; bi = y; }
+      for (var y = a; y <= b; y++) if (prof[y] > 2 && prof[y] < bv) { bv = prof[y]; bi = y; }
       return bi;
     }
-    function argmax(a, b) {
+    function argmax(a, b, prof) {
+      prof = prof || sm;
       a = Math.max(top, Math.round(a)); b = Math.min(bot, Math.round(b));
       var bi = a, bv = -1;
-      for (var y = a; y <= b; y++) if (sm[y] > bv) { bv = sm[y]; bi = y; }
+      for (var y = a; y <= b; y++) if (prof[y] > bv) { bv = prof[y]; bi = y; }
       return bi;
     }
 
@@ -546,14 +640,24 @@
     if (!(neckW > 1)) return null;
 
     /* 어깨 — 목 아래에서 폭이 확 커지는 지점.
-     * 최대 폭의 몇 %에 처음 닿는가로 잡아야 삼각근 끝이 아니라 어깨선이 된다. */
-    var shMaxY = argmax(neckY, top + H * 0.34);
-    var shMaxW = sm[shMaxY];
-    if (!(shMaxW > neckW * 1.35)) return null;     // 어깨가 목보다 안 넓다 = 실루엣 이상
+     * 최대 폭의 몇 %에 처음 닿는가로 잡아야 삼각근 끝이 아니라 어깨선이 된다.
+     *
+     * 폭은 **옷 프로파일**에서 읽는다. 실루엣으로 읽으면 어깨선(옷이 넓어지는
+     * 높이)이 아니라 팔이 시작되는 높이를 잡는다 — 맨팔은 어깨보다 조금
+     * 아래에서 시작하므로 어깨가 20px쯤 내려앉았고, 상의 전체가 그만큼
+     * 아래로 밀렸다. */
+    var shMaxY = argmax(neckY, top + H * 0.34, smT);
+    var shMaxW = smT[shMaxY];
+    if (!(shMaxW > neckW * 1.35)) {                // 옷으로 안 잡히면 실루엣으로
+      shMaxY = argmax(neckY, top + H * 0.34);
+      shMaxW = sm[shMaxY];
+      if (!(shMaxW > neckW * 1.35)) return null;   // 어깨가 목보다 안 넓다 = 실루엣 이상
+    }
+    var shProf = smT[shMaxY] === shMaxW ? smT : sm;
     var target = neckW + (shMaxW - neckW) * 0.70;
     var shoulderY = shMaxY;
     for (var y2 = neckY; y2 <= shMaxY; y2++) {
-      if (sm[y2] >= target) { shoulderY = y2; break; }
+      if (shProf[y2] >= target) { shoulderY = y2; break; }
     }
 
     /* 가랑이 — **아래에서 위로** 올라가며 두 다리가 합쳐지는 지점.
@@ -580,12 +684,61 @@
       else if (n3 === 1 && sawTwo) { crotchY = y3; break; }
     }
     var hipY = crotchY > 0 ? crotchY - H * 0.075 : top + H * 0.52;
+    /* 골반은 "가랑이에서 일정 비율 위"가 아니라 **아랫몸이 가장 넓은 곳**이다.
+     * 비율만 쓰면 다리가 긴 사람에게서 골반이 40px 넘게 내려갔고, 그만큼
+     * 상의 밑단도 같이 내려갔다. 가랑이 위 구간에서 옷 폭의 최댓값을 찾되,
+     * 그 값이 비율 추정보다 뚜렷하게 넓을 때만 바꾼다. */
+    if (crotchY > 0) {
+      /* 창은 가랑이 **바로 위**로 좁게 둔다. 넓게 잡으면 상의 밑단이
+       * 창 안에 들어오는데, 상의가 하의보다 넓으면 그 밑단을 골반으로
+       * 잡아 버린다 — 골반이 100px 위로 튀어 엉덩이 블록이 무릎까지
+       * 늘어났다. 그리고 창의 **안쪽**에서 최대여야 한다: 끝에 붙은
+       * 최댓값은 "여기가 제일 넓다"가 아니라 "창 밖이 더 넓다"는 뜻이다. */
+      var hLo = Math.round(crotchY - H * 0.12), hHi = Math.round(crotchY - H * 0.03);
+      var hCand = argmax(hLo, hHi, smT);
+      if (hCand > hLo + 2 && hCand < hHi - 2 &&
+          smT[hCand] > smT[clamp(Math.round(hipY), top, bot)] * 1.02) hipY = hCand;
+    }
     hipY = clamp(hipY, shoulderY + H * 0.14, top + H * 0.62);
 
-    /* 허리 — 어깨와 골반 사이에서 가장 좁은 곳 */
-    var waistY = argmin(shoulderY + (hipY - shoulderY) * 0.28,
-                        shoulderY + (hipY - shoulderY) * 0.88);
-    var bustY = argmax(shoulderY + H * 0.02, waistY - H * 0.01);
+    /* 허리 — "가장 좁은 곳"을 쓰되, 그것이 **진짜 잘록한 지점일 때만** 쓴다.
+     *
+     * 팔이 몸통에 겹쳐 보이면 폭 프로파일이 팔이 끝나는 높이까지 넓게
+     * 유지되다가 뚝 떨어진다. 그러면 최솟값이 탐색 구간의 맨 아래에 붙어
+     * 허리가 골반 근처로 밀린다 — 실측에서 477(정답 402)이 나왔다.
+     *
+     * 구간 양 끝보다 뚜렷하게 좁아야 잘록한 것으로 인정하고, 아니면
+     * 해부학 비율(어깨~골반의 62% 지점)로 둔다. 단조롭게 줄기만 하는
+     * 프로파일에서 최솟값은 허리가 아니라 그냥 구간의 끝이다. */
+    /* 겨드랑이 아래에서부터 찾는다. 소매가 걸린 높이는 옷 폭이 부풀어
+     * 있어 기준값을 왜곡한다. */
+    var wLo = Math.round(shoulderY + (hipY - shoulderY) * 0.42);
+    var wHi = Math.round(hipY - H * 0.02);
+    var cand = argmin(wLo, wHi, smT);
+    /* 두 가지를 모두 만족해야 "잰 허리"로 인정한다.
+     *   ① 구간의 **안쪽**일 것 — 최솟값이 끝에 붙어 있으면 잘록한 것이 아니라
+     *      프로파일이 계속 줄어들고 있다는 뜻이다(허리가 골반까지 밀렸다).
+     *   ② 충분히 **깊을 것** — 남성처럼 옆선이 밋밋하면 최솟값의 위치는
+     *      픽셀 잡음이 정한다. 얕은 골을 믿고 40px 어긋난 적이 있다.
+     * 둘 중 하나라도 아니면 해부학 비율로 둔다. 어깨(신장의 0.182)에서
+     * 허리(0.38)·골반(0.47)까지의 표준 비율이 0.69다. */
+    var interior = cand > wLo + 3 && cand < wHi - 3;
+    var ref = (smT[clamp(wLo, top, bot)] + smT[clamp(wHi, top, bot)]) / 2;
+    var anatW = shoulderY + (hipY - shoulderY) * 0.68;
+    /* 골이 얕을수록 잰 값을 덜 믿는다. 6% 이상 들어가 있으면 그대로 쓰고,
+     * 밋밋하면 해부학 비율 쪽으로 끌어당긴다 — 버리지도, 통째로 믿지도 않는다. */
+    var depth = (ref > 0 && smT[cand] > 0) ? (ref / smT[cand] - 1) : 0;
+    var trust = interior ? clamp(depth / 0.06, 0, 1) : 0;
+    var waistY = Math.round(anatW + (cand - anatW) * trust);
+    var bustY = argmax(shoulderY + H * 0.02, waistY - H * 0.01, smT);
+
+    /* 위치는 실루엣에서, 폭은 옷 입은 부분에서.
+     * 다만 **어깨만은 실루엣**을 쓴다. 어깨선 높이에서는 팔이 아직 몸통
+     * 옆으로 내려오지 않아 실루엣이 곧 어깨 너비다. 반대로 민소매를 입으면
+     * 옷 구간은 어깨끈 폭이라 어깨가 실제의 2/3로 줄어든다 — 그 값으로
+     * 재킷을 재단하니 몸통 픽셀의 7%가 옷 밖으로 밀려났다. */
+    function tw(y) { return smT[clamp(Math.round(y), top, bot)] || sm[clamp(Math.round(y), top, bot)]; }
+    function sw(y) { return sm[clamp(Math.round(y), top, bot)]; }
 
     var out = {
       _sane: true, _from: 'silhouette',
@@ -593,10 +746,15 @@
       chinY: Math.round(top + (neckY - top) * 0.80),
       headH: Math.round((neckY - top) * 0.80),
       bodyH: H,
-      shoulder: { y: Math.round(shoulderY), w: shMaxW },
-      bust: { y: Math.round(bustY), w: sm[bustY] },
-      waist: { y: Math.round(waistY), w: sm[waistY] },
-      hip: { y: Math.round(hipY), w: sm[Math.round(hipY)] || sm[waistY] }
+      crotchY: crotchY > 0 ? Math.round(crotchY) : -1,
+      shoulder: { y: Math.round(shoulderY), w: sw(shoulderY + H * 0.012) },
+      /* 가슴은 옷 구간으로 재되 어깨 대비 하한을 둔다. 민소매·나시를 입으면
+       * 옷 구간이 가슴이 아니라 앞판 폭이라 실제보다 한참 좁게 나오고,
+       * 그 폭으로 재킷을 재단하면 옷이 통째로 가늘어진다. 사람의 가슴
+       * 너비는 어깨(삼각근 포함)의 0.88 아래로는 내려가지 않는다. */
+      bust: { y: Math.round(bustY), w: Math.max(tw(bustY), sw(shoulderY + H * 0.012) * 0.88) },
+      waist: { y: Math.round(waistY), w: tw(waistY) },
+      hip: { y: Math.round(hipY), w: tw(hipY) }
     };
 
     /* ── 받아들이기 전에 검산한다 ──
@@ -698,7 +856,10 @@
       if (!isSkirt) {
         /* 두 다리를 각각 붙잡는다. 밑단 높이에서 실루엣이 두 조각이면
          * 그 안쪽 가장자리가 곧 다리 사이다 — 추정할 필요가 없다. */
-        var crotchY = clamp(hY + (L.bottom - hY) * 0.11 + shift, 0, body.h - 1);
+        /* 가랑이는 실루엣에서 이미 쟀다(silhouetteLM). 잰 값이 있으면 그걸
+         * 쓰고, 없을 때만 비율로 추정한다. */
+        var crotchY = clamp((L.crotchY > 0 ? L.crotchY : hY + (L.bottom - hY) * 0.11) + shift,
+                            0, body.h - 1);
         var crSpan = spanAt(body, crotchY, true);
         res.crotchC = [crSpan.cx, crotchY];
         var hemEdges = legEdges(body, hemY, crSpan.cx, hemHalf);
@@ -810,20 +971,36 @@
      * ---------------------------------------------------------------- */
     var sleeveKey = spec.sleeve || 'long';
     var arm = armInfo(body);
-    var armY = mapY(gA.armL[1]);
+    /* 팔 끝은 재서 알아낸 값을 쓰고, 못 찾았을 때만 해부학 추정으로 간다 */
+    var armEndY = arm.found ? arm.endY : wristY(L);
+    var armY = shY + (armEndY - shY) * (SLEEVE_FRAC[sleeveKey] != null
+      ? SLEEVE_FRAC[sleeveKey] : SLEEVE_FRAC.long);
     if (sleeveKey !== 'none') {
-      armY = clamp(Math.min(armY, arm.endY - body.h * 0.008), shY + body.h * 0.03, body.h - 1);
+      armY = Math.min(armY, arm.endY - body.h * 0.008);
+      /* 소맷부리는 겨드랑이보다 아래여야 한다. 위로 올라가면 소매 조각의
+       * 대응점 순서가 뒤집혀 TPS가 그 자리에서 접힌다. */
+      armY = Math.max(armY, pit.y + body.h * 0.015);
     }
+    armY = clamp(armY, shY + body.h * 0.03, body.h - 1);
     var armEdge = limbEdges(body, armY);
     var armHalfBase = armEdge.sepL || armEdge.sepR
       ? Math.max(axis - armEdge.Lout, armEdge.Rout - axis)
       : halfFor(gA.armL[1], gG.cx - gA.armL[0]) / ease;
+    /* 소매는 사람의 실루엣 밖으로 나갈 수 없다(여유분은 아래에서 곱한다).
+     * 옷본 비율로만 잡았더니 소맷부리가 팔보다 23px 넓어져, 소매가 배경
+     * 위에 걸쳐진 천 조각처럼 보였다. */
+    var armSpan = spanAt(body, armY, false);
+    if (armSpan.w > 2) armHalfBase = Math.min(armHalfBase, armSpan.w / 2 * 1.04);
     var armHalf = armHalfBase * ease;
     if (sleeveKey === 'none') armHalf = shHalf * 0.94;
 
     var elb = null;
     if (sleeveKey !== 'none' && gA.elbowOutL) {
-      var elY = clamp(mapY(gA.elbowOutL[1]), 0, body.h - 1);
+      /* 팔꿈치 대응점도 소매 구간(겨드랑이~소맷부리) 안에서 잡는다.
+       * 옷 기장에 대응시키면 소맷부리보다 아래로 내려가 소매가 뒤집힌다. */
+      var gPitY = gA.pitL[1], gArmY = gA.armL[1];
+      var te = clamp((gA.elbowOutL[1] - gPitY) / Math.max(1, gArmY - gPitY), 0, 1);
+      var elY = clamp(pit.y + te * (armY - pit.y), 0, body.h - 1);
       var e = limbEdges(body, elY);
       var pad = body.w * 0.004 * ease;
       elb = {
@@ -980,7 +1157,7 @@
    * 여유분·오버사이즈는 이미 대응점 좌표에 반영되어 있으므로, 여기에
    * 약간의 여유(12%)만 더하면 오버핏 옷도 실루엣 밖으로 자연스럽게 나간다.
    */
-  function torsoBound(A) {
+  function torsoBound(A, wideAboveY) {
     /* 소매가 붙는 높이(어깨~소맷부리)에서는 울타리를 크게 연다.
      *
      * 좁게 잡았더니 겨드랑이에 살색 쐐기가 남았다. 그 자리를 옷본 좌표는
@@ -989,15 +1166,16 @@
      * 소매는 이미 먼저 그려졌으므로, 남은 자리는 몸통이 메우는 것이 맞다.
      * 소맷부리 아래는 팔뚝이라 좁게 유지한다 — 그러지 않으면 손목에
      * 몸통 천이 얹힌다. */
-    var armY = A.armL ? A.armL[1] : (A.hemL ? A.hemL[1] : 1e9);
+    var armY = wideAboveY != null ? wideAboveY
+      : (A.armL ? A.armL[1] : (A.hemL ? A.hemL[1] : 1e9));
     var lv = [];
-    ['neck', 'sh', 'pit', 'chest', 'waist', 'hem'].forEach(function (k) {
+    ['neck', 'sh', 'pit', 'chest', 'waist', 'hip', 'hem'].forEach(function (k) {
       var l = A[k + 'L'], r = A[k + 'R'];
       if (l && r) lv.push([(l[1] + r[1]) / 2, (r[0] - l[0]) / 2, (l[0] + r[0]) / 2]);
     });
     if (!lv.length) return null;
     lv.sort(function (a, b) { return a[0] - b[0]; });
-    return function (x, y) {
+    function halfAt(y) {
       var i, half, cx;
       if (y <= lv[0][0]) { half = lv[0][1]; cx = lv[0][2]; }
       else if (y >= lv[lv.length - 1][0]) {
@@ -1012,8 +1190,15 @@
           }
         }
       }
-      var k = y <= armY + 2 ? 1.55 : 1.12;
-      return Math.abs(x - cx) <= half * k + 2;
+      return { half: half, cx: cx };
+    }
+    return {
+      halfAt: halfAt,
+      test: function (x, y) {
+        var q = halfAt(y);
+        var k = y <= armY + 2 ? 1.55 : 1.12;
+        return Math.abs(x - q.cx) <= q.half * k + 2;
+      }
     };
   }
 
@@ -1071,9 +1256,15 @@
       if (anchors.crotchC && G.anchors.crotchC) {
         pb.dst.push(anchors.crotchC); pb.src.push(G.anchors.crotchC);
       }
+      /* 하의에도 **몸 쪽 울타리**가 필요하다.
+       * TPS는 대응점 바깥으로도 매끄럽게 이어지므로, 허리 옆에 붙어 있는
+       * 팔뚝이 옷본 안쪽 좌표로 떨어져 청바지가 팔에 칠해졌다. 울타리는
+       * 허리·골반 대응점이 만든 폭 자체다(소매 같은 확장 구간은 없다). */
+      var bBound = torsoBound(anchors, -1e9);
       if (!anchors.legL || !G.anchors.legL) {
         if (pb.dst.length >= 4) {
-          parts.push({ name: 'bottom', dst: pb.dst, src: pb.src, test: null, wrap: true });
+          parts.push({ name: 'bottom', dst: pb.dst, src: pb.src, test: null,
+                       bound: bBound, wrap: true });
         }
         return parts;
       }
@@ -1088,7 +1279,7 @@
       });
       // 엉덩이·허리 블록은 가랑이 위쪽만 맡는다
       parts.push({
-        name: 'seat', dst: pb.dst, src: pb.src, wrap: true,
+        name: 'seat', dst: pb.dst, src: pb.src, wrap: true, bound: bBound,
         clampFn: function (uv) { if (uv[1] > gCrotch) uv[1] = gCrotch; }
       });
       return parts;
@@ -1097,6 +1288,14 @@
     var pt = withCenters(pairedOnly(KEYS_TORSO, anchors, G.anchors));
     if (pt.dst.length < 4) return parts;
     var gm = G.geom, cx = gm.cx, pitY = gm.armpitY, half = (gm.bodyHalf || 0) * 1.02;
+    /* 잘라 읽는 경계는 **솔기에서 확실히 떨어뜨린다.**
+     * 옷본의 겨드랑이 솔기는 어깨점에서 겨드랑이까지 비스듬히 내려오는
+     * 한 줄인데, 자르는 열이 그 위에 걸치면 그 한 줄이 잘린 픽셀마다
+     * 되풀이돼 가슴에 눈썹 모양 검은 곡선 두 개가 그려진다. 솔기 안쪽
+     * 12% 지점이면 어느 높이에서도 민무늬 천이다.
+     * (소매 조각의 경계 half 와는 다른 값이어야 한다 — 그쪽을 좁히면
+     *  소매가 몸통 천까지 가져간다.) */
+    var clampHalf = (gm.bodyHalf || 0) * 0.88;
 
     /* 소매를 **먼저** 칠한다. 소매는 팔을 정확히 맞히는 것이 목적이라
      * 옷본의 소매 영역에 제대로 떨어진 픽셀만 그린다(엄격).
@@ -1114,14 +1313,14 @@
       name: 'torso', dst: pt.dst, src: pt.src,
       clampFn: function (uv) {
         if (uv[1] < pitY) return;
-        if (uv[0] < cx - half) uv[0] = cx - half;
-        else if (uv[0] > cx + half) uv[0] = cx + half;
+        if (uv[0] < cx - clampHalf) uv[0] = cx - clampHalf;
+        else if (uv[0] > cx + clampHalf) uv[0] = cx + clampHalf;
       },
       /* 몸통은 옷본 좌표를 잘라서 읽으므로(구멍 방지) 무엇이든 칠할 수 있다.
        * 그래서 **몸 쪽에서도** 울타리를 쳐야 한다. 없으면 팔뚝처럼 몸통
        * 바깥이면서 인물 안쪽인 자리에 몸통 천이 얹혀, 손목에 천 조각이
        * 붙은 것처럼 보인다. 울타리는 대응점이 만든 몸통 폭 자체다. */
-      bodyTest: torsoBound(anchors),
+      bound: torsoBound(anchors),
       wrap: true
     });
     return parts;
@@ -1135,12 +1334,46 @@
       keys.forEach(function (k) { gsrc[k] = G.anchors[k]; });
       var ps = pairsOf(keys, anchors, gsrc);
       if (ps.dst.length < 4) return;
+
+      /* ── 소매가 갈 수 있는 자리를 몸 쪽에서도 못박는다 ──────────────
+       * 조각마다 TPS는 대응점 **바깥으로도** 매끄럽게 이어진다. 그래서
+       * 가슴 한복판의 픽셀이 옷본의 소매 안쪽 좌표로 떨어질 수 있고,
+       * 그러면 소매 밑단 솔기가 가슴에 눈썹 모양 곡선 두 개로 그려진다 —
+       * 실제로 그렇게 나왔다.
+       * 소매는 어깨점~소맷부리 사이의 **팔 쪽 띠**에만 있을 수 있다.
+       * 안쪽 경계는 어깨점 → 겨드랑이 → 소맷부리 안쪽을 잇는 선이고,
+       * 바깥 경계는 그 조각에서 가장 바깥으로 나간 대응점이다. */
+      var aSh = anchors['sh' + side], aPit = anchors['pit' + side];
+      var aArm = anchors['arm' + side], aCuf = anchors['cuffIn' + side];
+      var aElb = anchors['elbowOut' + side];
+      var sleeveW = Math.abs(aArm[0] - aCuf[0]) || Math.abs(aSh[0] - aPit[0]) || 8;
+      var m = sleeveW * 0.14;
+      var inner = [[aSh[1], aSh[0]], [aPit[1], aPit[0]], [aArm[1], aCuf[0]]]
+        .sort(function (a, b) { return a[0] - b[0]; });
+      var outs = [aSh[0], aArm[0]];
+      if (aElb) outs.push(aElb[0]);
+      var outX = sign < 0 ? Math.min.apply(null, outs) : Math.max.apply(null, outs);
+      var yPad = Math.max(4, (aArm[1] - aSh[1]) * 0.06);
+      var yTop = aSh[1] - yPad, yBot = aArm[1] + yPad;
+      var xspanFn = function (y) {
+        if (y < yTop || y > yBot) return null;
+        var q = inner[inner.length - 1][1];
+        if (y <= inner[0][0]) q = inner[0][1];
+        else for (var i = 1; i < inner.length; i++) {
+          if (y <= inner[i][0]) {
+            var t = (y - inner[i - 1][0]) / Math.max(1, inner[i][0] - inner[i - 1][0]);
+            q = inner[i - 1][1] + (inner[i][1] - inner[i - 1][1]) * t;
+            break;
+          }
+        }
+        return sign < 0 ? [outX - m, q + m] : [q - m, outX + m];
+      };
       // 소맷부리 **아래**도 막아야 한다. TPS는 대응점 밖에서도 계속 이어지므로,
       // 손목 아래로 외삽된 좌표가 다시 소매 안으로 떨어지면 팔목에 천 조각이
       // 뜬금없이 생긴다 — 실제로 초록 밴드가 그렇게 나타났다.
       var cuffLimit = G.anchors['arm' + side][1] * 1.03;
       parts.push({
-        name: 'sleeve' + side, dst: ps.dst, src: ps.src, tight: true,
+        name: 'sleeve' + side, dst: ps.dst, src: ps.src, tight: true, xspan: xspanFn,
         test: function (gx, gy) {
           return gy >= pitY * 0.92 && gy <= cuffLimit && (gx - cx) * sign > half * 0.94;
         }
@@ -1162,7 +1395,7 @@
     var core = spanAt(body, y, true);
     var res = { coreL: core.x0, coreR: core.x1, cx: core.cx,
                 Lout: core.x0, Lin: core.x0, Rout: core.x1, Rin: core.x1, sepL: false, sepR: false };
-    if (runs.length < 2) return res;
+    if (runs.length < 2) return armFromSkin(body, y, res);
     var big = 0;
     for (var i = 1; i < runs.length; i++) {
       if (runs[i][1] - runs[i][0] > runs[big][1] - runs[big][0]) big = i;
@@ -1176,6 +1409,36 @@
     }
     for (var k = big + 1; k < runs.length; k++) {  // 오른쪽
       res.Rout = runs[k][1]; res.Rin = runs[k][0]; res.sepR = true; break;
+    }
+    return armFromSkin(body, y, res);
+  }
+
+  /**
+   * 팔이 몸통에 붙어 보이는 행에서 팔의 가장자리를 찾는다.
+   *
+   * 실루엣이 한 조각이면 팔이 없는 것이 아니라 **팔이 몸에 닿아 있는 것**이다.
+   * 사진에서는 그쪽이 오히려 흔하다. 그런데 조각 개수로만 판단하면 소매가
+   * 붙잡을 좌표가 없어져, 옷본 비율로 찍은 자리에 소매가 널브러진다 —
+   * 초록 반팔이 팔꿈치께에 벙어리장갑처럼 얹힌 것이 그 결과였다.
+   *
+   * 반팔이면 팔은 맨살, 몸통은 옷이므로 옷 구간(tx)의 바깥이 곧 팔이다.
+   * 그 폭이 팔로서 그럴듯한 범위일 때만 받아들인다.
+   */
+  function armFromSkin(body, y, res) {
+    var r = body.rows[clamp(Math.round(y), 0, body.h - 1)];
+    if (!r || r.tx0 < 0) return res;
+    var lo = body.w * 0.012, hi = body.w * 0.20;
+    if (!res.sepL) {
+      var dL = r.tx0 - r.cx0;
+      if (dL >= lo && dL <= hi) {
+        res.Lout = r.cx0; res.Lin = r.tx0; res.coreL = r.tx0; res.sepL = true;
+      }
+    }
+    if (!res.sepR) {
+      var dR = r.cx1 - r.tx1;
+      if (dR >= lo && dR <= hi) {
+        res.Rout = r.cx1; res.Rin = r.tx1; res.coreR = r.tx1; res.sepR = true;
+      }
     }
     return res;
   }
@@ -1414,14 +1677,30 @@
       var by0 = clamp(Math.floor(Math.min.apply(null, ys)) - pad, 0, h - 1);
       var by1 = clamp(Math.ceil(Math.max.apply(null, ys)) + pad, 0, h - 1);
       var field = warpField(fn, bx0, by0, bx1, by1, 5);
-      var test = part.test, clampFn = part.clampFn, bodyTest = part.bodyTest;
+      var test = part.test, clampFn = part.clampFn;
+      var bound = part.bound || null, xspan = part.xspan || null;
       var partAllow = part.tight ? allowTight : allow;
 
       for (var y = by0; y <= by1; y++) {
         for (var x = bx0; x <= bx1; x++) {
           var p = y * w + x;
           if (!partAllow[p] || done[p]) continue;
-          if (bodyTest && !bodyTest(x, y)) continue;
+          if (xspan) {
+            var xr = xspan(y);
+            if (!xr || x < xr[0] || x > xr[1]) continue;
+          }
+          if (bound) {
+            var bq = bound.halfAt(y);
+            var off = Math.abs(x - bq.cx);
+            /* 몸통 조각은 **맨팔을 침범하지 않는다.**
+             * 인물 분리가 좋아지면서 팔이 몸통과 한 덩어리로 잡히자,
+             * 몸통이 팔까지 덮어 반팔 티셔츠가 판초처럼 보였다.
+             * 옷본 폭 바깥의 피부는 팔이므로 소매(먼저 그려진다)에 맡기고
+             * 몸통은 손대지 않는다. 안쪽 피부(맨 상체)는 덮는 것이 맞다. */
+            if (off > bq.half * 1.02 && body.skin[p]) continue;
+            var kk = y <= (anchors.armL ? anchors.armL[1] : 1e9) + 2 ? 1.55 : 1.12;
+            if (off > bq.half * kk + 2) continue;
+          }
 
           /* 얼굴·목은 절대 덮지 않는다 — 이 도구의 전부인 얼굴색이 가려진다 */
           if (body.skin[p] && neckY >= 0 && y < neckY + 2) continue;
