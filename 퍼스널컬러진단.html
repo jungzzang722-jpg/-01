@@ -1165,6 +1165,66 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
   background: var(--ctl); color: var(--label);
 }
 
+/* =========================================================================
+ * 다각도 촬영 (3단계) · 앞뒤 두께 측정
+ * ========================================================================= */
+.mv-slots {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+}
+@media (max-width: 640px) { .mv-slots { grid-template-columns: 1fr; } }
+
+.mv-drop { position: relative; padding: 16px 10px 14px; min-height: 150px; }
+.mv-drop .big { margin-bottom: 4px; }
+.mv-drop .t { font-size: 13px; }
+.mv-drop .d { font-size: 11px; }
+.mv-drop.filled { border-style: solid; border-color: var(--blue); background: var(--accent-soft); }
+
+.mv-tag {
+  position: absolute; top: 8px; right: 9px; font-size: 9.5px; font-weight: 600;
+  padding: 2px 7px; border-radius: 99px; background: var(--fill-3); color: var(--label-2);
+}
+.mv-tag.req { background: var(--accent-soft); color: var(--blue); }
+
+.mv-thumb {
+  display: block; margin: 8px auto 0; border-radius: var(--r-in);
+  box-shadow: var(--sh-card); max-height: 74px; width: auto;
+}
+
+.mv-panel {
+  margin-top: 16px; padding: 14px 16px; border-radius: var(--r-box);
+  background: var(--win-2); border: 1px solid var(--separator);
+}
+.mv-panel .fit-h { margin-top: 0; }
+
+.mv-graph { position: relative; margin: 10px 0 6px; }
+.mv-graph canvas { width: 100%; height: auto; display: block; max-width: 520px; margin: 0 auto; }
+.mv-legend { display: flex; gap: 14px; font-size: 10.5px; color: var(--label-2); }
+.mv-legend span::before {
+  content: ''; display: inline-block; width: 10px; height: 2.5px;
+  border-radius: 2px; margin-right: 5px; vertical-align: middle;
+}
+.mv-legend .b::before { background: var(--orange); }
+.mv-legend .g::before {
+  background: transparent; height: 0;
+  border-top: 1.5px dashed rgba(120,120,128,.75);
+}
+
+.mv-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 10px 0 4px; }
+.mv-table th {
+  text-align: left; font-weight: 600; font-size: 10.5px; color: var(--label-2);
+  padding: 4px 6px; border-bottom: 1px solid var(--separator);
+}
+.mv-table td { padding: 5px 6px; border-bottom: 1px solid var(--separator); }
+.mv-table tr:last-child td { border-bottom: none; }
+.mv-table td:not(:first-child) { font-variant-numeric: tabular-nums; }
+
+.mv-angles { margin-top: 12px; display: grid; gap: 7px; }
+.mv-ang { grid-template-columns: 62px 1fr 40px; }
+
+.fit-rep-note { margin: -2px 0 6px 24px; font-size: 11px; }
+
+.mv-pct { color: var(--label-3); font-size: 10.5px; }
+
 </style>
 </head>
 <body>
@@ -1335,23 +1395,52 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
   <!-- ══════════════ STEP 3 : 전신샷 ══════════════ -->
   <section class="card hidden" data-step="3">
     <h2>3단계 · 전신 사진 올리기</h2>
-    <p class="sub">머리부터 발끝까지 모두 나온 <b>정면 전신</b> 사진을 올려주세요. 체형·골격·비율·얼굴형을 분석해 코디와 헤어를 추천합니다.</p>
+    <p class="sub"><b>정면</b> 한 장이면 체형·비율 분석과 가상 피팅이 됩니다.
+    여기에 <b>양옆으로 돌아선 사진</b>을 더하면 몸의 <b>앞뒤 두께</b>를 재서
+    둘레까지 계산하고, 옷이 몸을 감싸는 모양도 훨씬 정확해집니다.</p>
 
     <ul class="guide-list" style="margin-bottom:16px">
       <li><span class="ic">🧱</span><span><b>단색 벽</b> 앞에서 촬영하면 실루엣 인식률이 크게 올라갑니다.</span></li>
       <li><span class="ic">🦶</span><span><b>발끝까지</b> 프레임 안에 넣고 아래 여백을 조금 두세요.</span></li>
       <li><span class="ic">🧍</span><span>팔은 몸에서 살짝 떼고, 몸에 <b>붙는 옷</b>일수록 정확합니다.</span></li>
       <li><span class="ic">📐</span><span>카메라는 <b>허리 높이</b>에서 수평으로. 위에서 찍으면 비율이 왜곡됩니다.</span></li>
+      <li><span class="ic">🔄</span><span>옆모습은 <b>제자리에서 몸만</b> 돌리세요. 카메라와 거리가 달라지면 두께가 틀어집니다.
+        <b>완전히 옆으로</b> 돌아야 합니다 — 비스듬히 서면 두께가 실제보다 두껍게 나옵니다.</span></li>
     </ul>
 
-    <button type="button" class="drop" id="dropFull" aria-describedby="dropFullDesc">
-      <div class="big">
-        <svg viewBox="0 0 44 44" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="22" cy="8.5" r="4.5"/><path d="M22 13v14M22 17l-8 4M22 17l8 4M22 27l-4.5 12M22 27l4.5 12"/></svg>
-      </div>
-      <div class="t">전신 사진을 여기에 놓거나 클릭해 선택</div>
-      <div class="d" id="dropFullDesc">단색 배경일수록 정확합니다</div>
-    </button>
+    <div class="mv-slots">
+      <button type="button" class="drop mv-drop" id="dropFull" aria-describedby="dropFullDesc">
+        <span class="mv-tag req">필수</span>
+        <div class="big">
+          <svg viewBox="0 0 44 44" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="22" cy="8.5" r="4.5"/><path d="M22 13v14M22 17l-8 4M22 17l8 4M22 27l-4.5 12M22 27l4.5 12"/></svg>
+        </div>
+        <div class="t">정면</div>
+        <div class="d" id="dropFullDesc">머리부터 발끝까지</div>
+        <canvas class="mv-thumb hidden"></canvas>
+      </button>
+      <button type="button" class="drop mv-drop" id="dropSideL">
+        <span class="mv-tag">선택</span>
+        <div class="big">
+          <svg viewBox="0 0 44 44" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="19" cy="8.5" r="4.5"/><path d="M19 13v14M19 17l-4 5M19 27l-3 12M19 27l3 12"/><path d="M31 6a16 16 0 0 1 0 32" stroke-dasharray="3 3"/></svg>
+        </div>
+        <div class="t">왼쪽 옆모습</div>
+        <div class="d">왼쪽으로 90° 돌아서</div>
+        <canvas class="mv-thumb hidden"></canvas>
+      </button>
+      <button type="button" class="drop mv-drop" id="dropSideR">
+        <span class="mv-tag">선택</span>
+        <div class="big">
+          <svg viewBox="0 0 44 44" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="25" cy="8.5" r="4.5"/><path d="M25 13v14M25 17l4 5M25 27l3 12M25 27l-3 12"/><path d="M13 6a16 16 0 0 0 0 32" stroke-dasharray="3 3"/></svg>
+        </div>
+        <div class="t">오른쪽 옆모습</div>
+        <div class="d">오른쪽으로 90° 돌아서</div>
+        <canvas class="mv-thumb hidden"></canvas>
+      </button>
+    </div>
     <input type="file" id="fileFull" accept="image/*" class="hidden" tabindex="-1">
+    <input type="file" id="fileSideL" accept="image/*" class="hidden" tabindex="-1">
+    <input type="file" id="fileSideR" accept="image/*" class="hidden" tabindex="-1">
+    <div id="mvPanel"></div>
 
     <div id="fullPreview" class="hidden" style="margin-top:18px">
       <div class="grid2">
@@ -6979,7 +7068,7 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     var lastL = -1, lastR = -1;
     for (var y = Math.max(0, L.shoulder.y); y < Math.min(h, L.bottom); y++) {
       var r = body.rows[y];
-      if (r.cx0 < 0) continue;
+      if (!r || r.cx0 < 0) continue;
       if (r.cx0 - r.x0 > gap) lastL = y;
       if (r.x1 - r.cx1 > gap) lastR = y;
     }
@@ -7008,12 +7097,19 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     Object.keys(lm).forEach(function (k) {
       out[k] = (lm[k] && typeof lm[k] === 'object') ? { y: lm[k].y, w: lm[k].w } : lm[k];
     });
+    /* 반드시 정수로 남긴다.
+     * 이 값들은 곧바로 rows[y] 의 색인이 되는데, clamp 의 경계가 소수라
+     * 결과도 소수가 되면 rows[202.9] 가 undefined 로 나와 조용히 터진다.
+     * 정면에서는 값이 범위 안이라 clamp 가 걸리지 않아 드러나지 않다가,
+     * 옆모습에서 처음 터졌다. */
     var top = out.top, bot = out.bottom, H = Math.max(1, bot - top);
-    out.chinY = clamp(out.chinY, top, top + H * 0.26);
-    out.shoulder.y = clamp(out.shoulder.y, out.chinY + H * 0.015, top + H * 0.30);
-    out.waist.y = clamp(out.waist.y, out.shoulder.y + H * 0.10, top + H * 0.52);
-    out.hip.y = clamp(out.hip.y, out.waist.y + H * 0.04, top + H * 0.64);
-    if (out.bust) out.bust.y = clamp(out.bust.y, out.shoulder.y + H * 0.03, out.waist.y - H * 0.01);
+    out.chinY = Math.round(clamp(out.chinY, top, top + H * 0.26));
+    out.shoulder.y = Math.round(clamp(out.shoulder.y, out.chinY + H * 0.015, top + H * 0.30));
+    out.waist.y = Math.round(clamp(out.waist.y, out.shoulder.y + H * 0.10, top + H * 0.52));
+    out.hip.y = Math.round(clamp(out.hip.y, out.waist.y + H * 0.04, top + H * 0.64));
+    if (out.bust) {
+      out.bust.y = Math.round(clamp(out.bust.y, out.shoulder.y + H * 0.03, out.waist.y - H * 0.01));
+    }
     return out;
   }
 
@@ -7027,10 +7123,15 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     var lenAdj = opts.lengthAdj == null ? 0 : opts.lengthAdj;    // 기장 ±
     var shift = opts.shiftY == null ? 0 : opts.shiftY;
 
+    var mvHalfB = opts.halfAt || null;
     function pair(y, halfScale, core) {
       var s = spanAt(body, y, core !== false);
-      var half = (s.w / 2) * halfScale;
-      return { cx: s.cx, y: y, L: [s.cx - half, y], R: [s.cx + half, y] };
+      /* 하의도 옆모습 프로파일이 있으면 그쪽을 쓴다. 골반 높이에서 실루엣
+       * 폭을 그대로 읽으면 손끝이 걸려 골반이 통째로 넓어진다. */
+      var base = mvHalfB
+        ? mvHalfB(clamp((y - L.shoulder.y) / Math.max(1, L.hip.y - L.shoulder.y), 0, 1))
+        : s.w / 2;
+      return { cx: s.cx, y: y, L: [s.cx - base * halfScale, y], R: [s.cx + base * halfScale, y] };
     }
 
     if (spec.cat === 'bottom') {
@@ -7097,6 +7198,18 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
 
     var axis = centerAxis(body, L);
 
+    /* 몸통 반폭의 출처.
+     * 옆모습을 재 두었으면 그 프로파일을 쓴다 — body.js 의 랜드마크 폭은
+     * "어깨~허리 사이 최대 폭"이라 팔이 몸에 닿으면 부풀어 오르는데,
+     * multiview 쪽은 분위수로 그 오염을 걷어낸 값이라 더 안정적이다.
+     * 두 값이 다르면 옷 둘레와 몸 둘레가 어긋나 핏 판정이 틀어진다 —
+     * 티셔츠가 실제보다 20% 크게 나왔던 원인이다.
+     * 옆모습 시점에서는 보이는 폭이 곧 두께이므로 투영식으로 바꿔 준다. */
+    var mvHalf = opts.halfAt || null;
+    var halfOf = mvHalf
+      ? function (y) { return mvHalf(clamp((y - L.shoulder.y) / Math.max(1, L.hip.y - L.shoulder.y), 0, 1)); }
+      : function (y) { return torsoHalf(L, y); };
+
     /* ── 가로 폭 : 옷본의 폭 프로파일을 몸 크기로 옮기고, 체형은 **감쇠해서**
      *   섞는다.
      *
@@ -7117,13 +7230,16 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       [gA.waistL[1], gG.waistHalf],
       [gA.hemL[1],   gG.hemHalf]
     ];
-    var bodyAtLv = gLevels.map(function (lv) { return torsoHalf(L, mapY(lv[0])); });
+    var bodyAtLv = gLevels.map(function (lv) { return halfOf(mapY(lv[0])); });
     var gMed = CC.median(gLevels.map(function (lv) { return lv[1]; })) || 1;
     var bMed = CC.median(bodyAtLv) || 1;
-    var sizeScale = bMed / gMed;
+    /* 옷의 치수감(spec.fit)을 되살린다.
+     * 옷본의 중앙값으로 나누면 옷본에 들어 있던 fit 계수가 그대로 약분돼,
+     * 슬림 티셔츠와 오버핏 후디가 **같은 폭으로** 그려졌다. 다시 곱해 준다. */
+    var sizeScale = (bMed / gMed) * (spec.fit || 1);
 
     function halfFor(gy, gHalf) {
-      var shapeR = Math.pow(clamp(torsoHalf(L, mapY(gy)) / bMed, 0.40, 2.2), DAMP);
+      var shapeR = Math.pow(clamp(halfOf(mapY(gy)) / bMed, 0.40, 2.2), DAMP);
       return gHalf * sizeScale * shapeR * ease;
     }
     function pairAt(gy, gHalf) {
@@ -7199,7 +7315,7 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     var cs = [];
     for (var y = Math.max(0, L.shoulder.y); y <= Math.min(body.h - 1, L.hip.y); y++) {
       var r = body.rows[y];
-      if (r.cx0 >= 0) cs.push((r.cx0 + r.cx1) / 2);
+      if (r && r.cx0 >= 0) cs.push((r.cx0 + r.cx1) / 2);
     }
     if (!cs.length) return (body._axis = body.w / 2);
     cs.sort(function (a, b) { return a - b; });
@@ -7228,6 +7344,65 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       }
     }
     return pts[pts.length - 1][1];
+  }
+
+  /* =======================================================================
+   * 4-b. 원통 감기 (cylindrical wrap)
+   *
+   * 지금까지는 옷본의 가로 좌표를 실루엣 폭에 **선형으로** 폈다. 그러면 옷이
+   * 몸을 감싸는 게 아니라 앞에 납작하게 붙는다. 몸통은 원기둥에 가까우므로
+   * 실제로는 옆으로 갈수록 천이 급격히 줄어들어 보여야 한다.
+   *
+   * 단면을 반폭 a · 반두께 b 인 타원으로 두고 몸이 θ 만큼 돌아섰다고 하자.
+   * 표면의 각위치 φ(0=정면 중앙, ±90°=옆선)에 있는 점이 화면에 찍히는 곳은
+   *
+   *      X(φ) = a·sinφ·cosθ + b·cosφ·sinθ = R·sin(φ + δ)
+   *      R = √(a²cos²θ + b²sin²θ)  (= 관측되는 반폭)
+   *      δ = atan2(b·sinθ, a·cosθ)
+   *
+   * 이므로, 실루엣 안의 정규화 위치 t = X/R 에서 거꾸로
+   *
+   *      φ = asin(t) − δ
+   *
+   * 를 얻는다. b/a 는 옆모습 사진에서 **잰 값**을 쓴다(multiview.js).
+   * 옆모습이 없으면 0.72 를 쓰되, 그때는 이 값이 가정임을 화면에 밝힌다.
+   *
+   * |φ| > 90° 는 옷본에 없는 뒷면이다. 접어서 되비추면(중앙 앞섶이 중앙 뒤로
+   * 간다) 대칭 의류에서는 자연스럽게 이어진다.
+   * ===================================================================== */
+  var DEFAULT_DEPTH_RATIO = 0.72;
+
+  function wrapU(t, delta) {
+    var phi = Math.asin(clamp(t, -1, 1)) - delta;      // 라디안
+    var u = phi / (Math.PI / 2);                       // −1 … +1 이 앞면
+    if (u > 1) u = 2 - u;                              // 뒷면을 접어 되비춘다
+    else if (u < -1) u = -2 - u;
+    return clamp(u, -1, 1);
+  }
+
+  /** 옷본의 높이별 반폭 — 감기 좌표를 정규화하는 데 쓴다 */
+  function garmentHalfFn(G, spec) {
+    var A = G.anchors, lv = [];
+    var keys = spec.cat === 'bottom'
+      ? [['waistL', 'waistR'], ['hipL', 'hipR'], ['hemL', 'hemR']]
+      : [['neckL', 'neckR'], ['shL', 'shR'], ['pitL', 'pitR'],
+         ['chestL', 'chestR'], ['waistL', 'waistR'], ['hemL', 'hemR']];
+    keys.forEach(function (kk) {
+      var l = A[kk[0]], r = A[kk[1]];
+      if (l && r) lv.push([(l[1] + r[1]) / 2, (r[0] - l[0]) / 2]);
+    });
+    if (!lv.length) return null;
+    lv.sort(function (a, b) { return a[0] - b[0]; });
+    return function (gy) {
+      if (gy <= lv[0][0]) return lv[0][1];
+      for (var i = 1; i < lv.length; i++) {
+        if (gy <= lv[i][0]) {
+          var t = (gy - lv[i - 1][0]) / Math.max(1, lv[i][0] - lv[i - 1][0]);
+          return lv[i - 1][1] + (lv[i][1] - lv[i - 1][1]) * t;
+        }
+      }
+      return lv[lv.length - 1][1];
+    };
   }
 
   /* =======================================================================
@@ -7341,7 +7516,9 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
         pb.dst.push(anchors.crotchC); pb.src.push(G.anchors.crotchC);
       }
       if (!anchors.legL || !G.anchors.legL) {
-        if (pb.dst.length >= 4) parts.push({ name: 'bottom', dst: pb.dst, src: pb.src, test: null });
+        if (pb.dst.length >= 4) {
+          parts.push({ name: 'bottom', dst: pb.dst, src: pb.src, test: null, wrap: true });
+        }
         return parts;
       }
 
@@ -7355,7 +7532,7 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       });
       // 엉덩이·허리 블록은 가랑이 위쪽만 맡는다
       parts.push({
-        name: 'seat', dst: pb.dst, src: pb.src,
+        name: 'seat', dst: pb.dst, src: pb.src, wrap: true,
         clampFn: function (uv) { if (uv[1] > gCrotch) uv[1] = gCrotch; }
       });
       return parts;
@@ -7388,7 +7565,8 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
        * 그래서 **몸 쪽에서도** 울타리를 쳐야 한다. 없으면 팔뚝처럼 몸통
        * 바깥이면서 인물 안쪽인 자리에 몸통 천이 얹혀, 손목에 천 조각이
        * 붙은 것처럼 보인다. 울타리는 대응점이 만든 몸통 폭 자체다. */
-      bodyTest: torsoBound(anchors)
+      bodyTest: torsoBound(anchors),
+      wrap: true
     });
     return parts;
 
@@ -7554,7 +7732,7 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
           if (!reveal[p2]) continue;
           var isLeg = legHem != null && y2 > legHem + 2;
           var core = body.rows[y2];
-          var outOfTorso = core.cx0 < 0 || x2 < core.cx0 - 1 || x2 > core.cx1 + 1;
+          var outOfTorso = !core || core.cx0 < 0 || x2 < core.cx0 - 1 || x2 > core.cx1 + 1;
           var isArm = sleeveEnd != null && y2 > sleeveEnd + 2 && outOfTorso;
           if (!isLeg && !isArm) continue;
           var lf2 = clamp(body.light[p2] / lmeanB, 0.68, 1.34);
@@ -7619,7 +7797,11 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     var gd = gimg.data;
 
     /* --- 대응점 : 몸통 / 왼소매 / 오른소매 --- */
-    var anchors = bodyAnchors(body, spec, layer.opts || gopts || {}, G);
+    var aopts = layer.opts || gopts || {};
+    if (gopts && gopts.view && gopts.view.halfAt && !aopts.halfAt) {
+      aopts = Object.assign({}, aopts, { halfAt: gopts.view.halfAt });
+    }
+    var anchors = bodyAnchors(body, spec, aopts, G);
     if (!anchors) return null;
     var parts = buildParts(spec, G, anchors);
     if (!parts.length) return null;
@@ -7635,6 +7817,23 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     var lmean = meanLightOver(body, allow, anchors);
     var lightAmt = gopts && gopts.lightAmount != null ? gopts.lightAmount : 0.75;
     var neckY = anchors._neckY != null ? anchors._neckY : -1;
+
+    /* ── 원통 감기 준비 ──
+     * 옷본 좌표를 몸의 단면 형상에 맞춰 다시 배치한다. 옆모습에서 잰
+     * 두께가 있으면 그 값을, 없으면 기본 비율을 쓴다. */
+    var view = (gopts && gopts.view) || null;
+    var yawDeg = view && view.yaw != null ? view.yaw : 0;
+    var wrapAmt = gopts && gopts.wrap != null ? gopts.wrap : 1;
+    var gHalfFn = wrapAmt > 0.01 ? garmentHalfFn(G, spec) : null;
+    var gcxW = G.geom.cx;
+    var yawRad = yawDeg * Math.PI / 180;
+    var depthAt = view && view.depthRatioAt
+      ? view.depthRatioAt
+      : function () { return DEFAULT_DEPTH_RATIO; };
+    // 높이(몸 좌표)를 어깨=0 · 밑단=1 로 정규화해 두께 비를 읽는다
+    var wTop = anchors._shY != null ? anchors._shY : anchors._topY;
+    var wBot = anchors._hemY != null ? anchors._hemY : (wTop + 1);
+    var wSpan = Math.max(1, wBot - wTop);
 
     /* 조각끼리 겹치는 진동(어깨) 부근을 두 번 칠하지 않게 한다 */
     var done = new Uint8Array(w * h);
@@ -7666,6 +7865,22 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
           if (body.skin[p] && neckY >= 0 && y < neckY + 2) continue;
 
           field(x, y, uv);
+
+          /* 몸통에만 원통 감기를 적용한다. 소매는 팔이라는 훨씬 가는
+           * 원기둥이라 같은 식을 쓰면 과하게 눌린다. */
+          if (gHalfFn && part.wrap) {
+            var hg = gHalfFn(uv[1]);
+            if (hg > 1) {
+              var tt = (uv[0] - gcxW) / hg;
+              if (tt > -1.6 && tt < 1.6) {
+                var br = depthAt(clamp((y - wTop) / wSpan, 0, 1));
+                var dl = Math.atan2(br * Math.sin(yawRad), Math.cos(yawRad));
+                var uw = wrapU(tt, dl);
+                uv[0] = gcxW + (uw * wrapAmt + tt * (1 - wrapAmt)) * hg;
+              }
+            }
+          }
+
           // 이 조각이 맡은 옷본 영역으로 좌표를 정리한다.
           // 소매는 벗어나면 버리고(정확도 우선), 몸통은 잘라서 읽는다(구멍 방지).
           if (clampFn) clampFn(uv);
@@ -7790,7 +8005,458 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     solveTPS: solveTPS, warpField: warpField, paletteFor: paletteFor,
     HEM_BODY: HEM_BODY, KEYS_TOP: KEYS_TOP, KEYS_BOTTOM: KEYS_BOTTOM,
     saneLM: saneLM, buildParts: buildParts, limbEdges: limbEdges,
+    wrapU: wrapU, garmentHalfFn: garmentHalfFn, DEFAULT_DEPTH_RATIO: DEFAULT_DEPTH_RATIO,
     clearTintCache: function () { _tintCache = []; }
+  };
+})(window);
+</script>
+<script>
+/* =========================================================================
+ * multiview.js — 여러 각도의 전신 사진에서 몸의 앞뒤 두께를 **잰다**
+ *
+ * 이 도구가 스스로 적어 둔 가장 큰 한계는 이것이었다.
+ *
+ *   "정면 사진 한 장에서 몸의 3D 형태를 알 수 없다.
+ *    옷은 실루엣 폭에만 맞춰지며 앞뒤 두께는 반영되지 않는다."
+ *
+ * 사진을 한 장 더 주면 이 한계가 사라진다. 정확히는, **추정이 계산이 된다.**
+ *
+ * ── 원리 ────────────────────────────────────────────────────────────────
+ * 몸통의 가로 단면을 생각하자. 반폭 a(좌우), 반두께 b(앞뒤).
+ * 이 사람이 수직축을 중심으로 θ만큼 돌아서면 실루엣 반폭은
+ *
+ *      w(θ) = √( a²cos²θ + b²sin²θ )      (단면이 타원일 때)
+ *
+ * 정면(θ=0)은 w = a 를 준다. 남은 미지수는 b 와 θ 다.
+ *
+ * ── 처음에 틀렸던 접근 ─────────────────────────────────────────────────
+ * "좌우 두 장을 주면 두 각도와 두께를 함께 풀 수 있다"고 설계했다가
+ * 실측에서 각도가 탐색 상한(85°)에 눌러앉는 것을 보고 알았다 —
+ * **좌우 대칭으로 돌면 어떤 각도를 넣어도 좌우가 똑같이 맞는다.**
+ * 두 사진의 일치는 각도에 대해 아무 정보도 주지 않는다(1-매개변수 축퇴).
+ *
+ * ── 실제로 쓰는 방법 : 옆모습 ──────────────────────────────────────────
+ * 45°가 아니라 **옆으로 돌아선 사진**을 받는다. θ=90°에서
+ *
+ *      w(90°) = b                      ← 두께를 그대로 준다
+ *      dw/dθ  = 0                      ← 각도 오차에 1차적으로 둔감하다
+ *
+ * 두 번째 성질이 결정적이다. 완전히 90°가 아니어도 된다. a=0.10, b=0.07 인
+ * 몸통을 80°로만 돌아서 찍어도 측정 두께는 0.0711 — 참값 대비 1.5% 오차다.
+ * 각도를 정확히 맞추라고 요구하는 대신 **각도에 둔감한 지점에서 잰다.**
+ *
+ * 더 좋은 점이 하나 더 있다. θ=90° 에서는 어떤 단면 모양이든
+ * w = b 다(타원이든 초타원이든 지지함수가 같다). 즉 **두께 자체는
+ * 단면 가정과 무관하게 측정된다.** 타원 가정은 두께를 둘레로 바꿀 때만
+ * 들어온다.
+ *
+ * ── 그러면 좌우 두 장은 왜 받는가 ──────────────────────────────────────
+ * 각도를 풀기 위해서가 아니라 **검산하기 위해서**다. 같은 사람의 같은
+ * 몸통이므로 왼쪽에서 잰 두께와 오른쪽에서 잰 두께는 같아야 한다.
+ * 벌어지면 자세가 틀어졌거나 한쪽이 덜 돌아간 것이고, 그 사실을 보고한다.
+ * README가 말하는 "정답을 몰라도 참인 성질"을 하나 더 얻는 셈이다.
+ *
+ * ── 정직한 한계 ─────────────────────────────────────────────────────────
+ * · 두께는 잰다. 하지만 **둘레**로 바꿀 때는 단면이 타원이라는 가정이
+ *   들어간다. 실제 허리 단면은 타원보다 각져 있어 타원 둘레는 대체로
+ *   과소평가한다. 줄자 실측을 하나라도 넣으면 그 비율로 나머지를 보정한다.
+ * · 옷 두께가 그대로 더해진다. 몸에 붙는 옷일수록 정확하다.
+ * · 옆모습에서 팔이 몸통 앞뒤로 튀어나오면 두께가 부풀어 오른다.
+ * · 덜 돌아선 사진은 두께를 과대평가한다. b/a 가 사람의 범위를 벗어나면
+ *   그 사실을 감지해 경고한다.
+ * ========================================================================= */
+(function (global) {
+  'use strict';
+
+  var clamp = CC.clamp;
+  var DEG = Math.PI / 180;
+
+  /* 몸통을 몇 개 높이에서 재는가. 너무 촘촘하면 노이즈만 늘고,
+   * 너무 성기면 가슴·허리의 변화를 놓친다. */
+  var LEVELS = 15;
+
+  /* =======================================================================
+   * 1. 높이 정규화 — 세 장의 사진은 크기도 위치도 다르다
+   *
+   * 같은 사람이라도 한 걸음 다가서면 픽셀 크기가 달라진다. 그래서 픽셀이
+   * 아니라 **해부학적 위치**로 맞춘다. 어깨선을 0, 골반선을 1로 두고 그
+   * 사이를 등분하면, 어느 사진의 0.5든 같은 신체 부위를 가리킨다.
+   *
+   * 폭도 픽셀이 아니라 **몸 전체 높이 대비 비율**로 잰다. 돌아서도 키는
+   * 변하지 않으므로 이 기준은 회전에 영향받지 않는다.
+   * ===================================================================== */
+  function profileOf(bodyRes) {
+    if (!bodyRes || !bodyRes.ok) return null;
+    var L = TRYON.saneLM(bodyRes.landmarks);
+    var rows = bodyRes.rows, h = bodyRes.work.h;
+    var H = Math.max(1, L.bottom - L.top);
+    var win = Math.max(1, Math.round(H * 0.018));
+
+    var half = new Float64Array(LEVELS);
+    var cx = new Float64Array(LEVELS);
+    var ok = true;
+
+    for (var i = 0; i < LEVELS; i++) {
+      var t = i / (LEVELS - 1);
+      var y = Math.round(L.shoulder.y + t * (L.hip.y - L.shoulder.y));
+      /* 창을 어깨~골반 **안쪽으로** 가둔다.
+       * 골반선에서 아래로 창이 넘어가면 다리가 갈라진 행을 함께 읽는데,
+       * 그 행의 최장 구간은 다리 한 짝이라 폭이 통째로 작아진다.
+       * 실측에서 골반 둘레가 11cm 과소평가된 원인이었다. */
+      var lo = Math.round(L.shoulder.y), hi = Math.round(L.hip.y);
+      var ws = [], cs = [];
+      for (var k = -win; k <= win; k++) {
+        if (y + k < lo || y + k > hi) continue;
+        // body.js 의 행 필드는 coreX0/coreX1 이다(tryon.js 의 prepare 가 쓰는
+        // cx0/cx1 과 이름이 다르다). 잘못 읽으면 조용히 NaN이 되어 각도가
+        // 탐색 하한에 눌러앉는다 — 실제로 그랬다.
+        var r = rows[clamp(y + k, 0, h - 1)];
+        if (!r || r.coreX0 == null || r.coreX0 < 0) continue;
+        ws.push((r.coreX1 - r.coreX0 + 1) / 2);
+        cs.push((r.coreX0 + r.coreX1) / 2);
+      }
+      if (ws.length < 2) {                      // 창이 너무 좁아졌으면 그 행만
+        var rr = rows[clamp(y, 0, h - 1)];
+        if (rr && rr.coreX0 >= 0) {
+          ws = [(rr.coreX1 - rr.coreX0 + 1) / 2];
+          cs = [(rr.coreX0 + rr.coreX1) / 2];
+        }
+      }
+      if (!ws.length) { ok = false; break; }
+      ws.sort(function (a, b) { return a - b; });
+      cs.sort(function (a, b) { return a - b; });
+      /* 팔이 몸통에 겹치면 최장 구간이 부풀어 오른다. 중앙값보다 아래인
+       * 30 퍼센타일을 쓰면 그 오염을 상당 부분 걷어낸다 — 팔은 폭을
+       * 늘리기만 하지 줄이지 않기 때문이다. */
+      half[i] = ws[Math.floor(ws.length * 0.30)] / H;
+      cx[i] = cs[cs.length >> 1];
+    }
+    if (!ok) return null;
+    for (var q = 0; q < LEVELS; q++) {
+      if (!isFinite(half[q]) || half[q] <= 0) return null;   // 조용한 NaN 차단
+    }
+
+    return {
+      half: half, cx: cx, H: H, lm: L, head: headWidth(rows, L, h, H),
+      levelY: function (t) { return L.shoulder.y + t * (L.hip.y - L.shoulder.y); }
+    };
+  }
+
+  /**
+   * 머리의 실루엣 폭 (키 대비 비율).
+   *
+   * 머리는 **얼마나 돌아섰는지 알려주는 유일하게 믿을 만한 신호**다.
+   * 몸통의 앞뒤/좌우 비는 사람마다 크게 다르지만, 머리의 앞뒤 길이 대비
+   * 좌우 폭(두개지수)은 성인 사이에서 훨씬 좁은 범위에 있다.
+   * 정수리 근처는 둥글어 폭이 급격히 변하므로 머리 높이의 25~75 % 구간에서
+   * 가장 넓은 곳을 쓴다.
+   */
+  function headWidth(rows, L, h, H) {
+    /* 턱 위치(chinY)에 기대지 않는다.
+     * chinY 는 피부색 기반 얼굴 검출에서 나오는데, 그 검출이 빗나가면
+     * 창이 어깨까지 내려가 어깨 폭을 머리 폭으로 읽는다 — 실측에서
+     * 머리 폭이 키의 20%(=어깨 폭)로 나왔다.
+     * 대신 **키 대비 고정 구간**을 쓴다. 성인은 6.5~8등신이라 머리는
+     * 정수리에서 키의 12% 안에 들어가고, 어깨는 그보다 아래에 있다. */
+    var a = Math.round(L.top + H * 0.02);
+    var b = Math.round(L.top + H * 0.12);
+    var mx = 0;
+    for (var y = a; y <= b; y++) {
+      var r = rows[clamp(y, 0, h - 1)];
+      if (!r || r.coreX0 == null || r.coreX0 < 0) continue;
+      mx = Math.max(mx, r.coreX1 - r.coreX0 + 1);
+    }
+    // 머리가 키의 6~12% 폭을 벗어나면 머리를 잡은 것이 아니다 — 쓰지 않는다
+    var w = mx / H;
+    return (w > 0.05 && w < 0.15) ? w : null;
+  }
+
+  /* =======================================================================
+   * 2. 두께 역산
+   *
+   * 각도를 알면 두께는 바로 나온다.
+   *      b² = ( w² − a²cos²θ ) / sin²θ
+   * θ=90° 이면 b = w 로 단순해진다. 이것이 옆모습을 받는 이유다.
+   * ===================================================================== */
+  /** 한 각도에서 두께를 역산. 불가능한 값이 나오면 벌점을 매겨 돌려준다. */
+  function depthFrom(a, w, deg) {
+    var th = deg * DEG, c2 = Math.cos(th) * Math.cos(th), s2 = Math.sin(th) * Math.sin(th);
+    if (s2 < 1e-4) return null;
+    var b = new Float64Array(LEVELS), pen = 0;
+    for (var i = 0; i < LEVELS; i++) {
+      var v = (w[i] * w[i] - a[i] * a[i] * c2) / s2;
+      if (v < 0) {
+        /* 돌아선 쪽이 정면보다 좁다 — 이 각도에서는 있을 수 없는 일이다.
+         * 버리지 않고 0으로 두되 얼마나 모순인지 벌점으로 남긴다. */
+        pen += Math.sqrt(-v);
+        v = 0;
+      }
+      b[i] = Math.sqrt(v);
+    }
+    /* 두께가 폭보다 크면(b > a) 사람 몸통이 아니다. 완만하게 벌점. */
+    for (var j = 0; j < LEVELS; j++) {
+      if (b[j] > a[j] * 1.25) pen += (b[j] - a[j] * 1.25);
+    }
+    return { b: b, penalty: pen / LEVELS };
+  }
+
+  /* =======================================================================
+   * 3. 둘레 — 타원 둘레 근사 (Ramanujan 제2근사)
+   *
+   * 오차가 상대적으로 3e-5 수준이라 이 용도에는 넘치도록 정확하다.
+   * 정확하지 않은 것은 공식이 아니라 **단면이 타원이라는 가정**이다.
+   * ===================================================================== */
+  function ellipsePerimeter(a, b) {
+    if (a <= 0 || b < 0) return 0;
+    var h = Math.pow((a - b) / (a + b), 2);
+    return Math.PI * (a + b) * (1 + 3 * h / (10 + Math.sqrt(4 - 3 * h)));
+  }
+
+  /**
+   * 픽셀 비율을 cm로 바꾼다. 기준은 사용자가 입력한 키뿐이다.
+   * 키가 없으면 cm를 만들어내지 않고 비율만 돌려준다 — 없는 근거로
+   * 숫자를 찍어내지 않는다는 이 도구의 규칙 그대로다.
+   */
+  function circumferences(front, depth, heightCm) {
+    var L = front.lm;
+    var levels = { bust: null, waist: null, hip: null };
+    var yb = L.bust ? L.bust.y : (L.shoulder.y + L.waist.y) / 2;
+    var span = Math.max(1, L.hip.y - L.shoulder.y);
+    var tOf = function (y) { return clamp((y - L.shoulder.y) / span, 0, 1); };
+    var idxOf = function (t) { return clamp(Math.round(t * (LEVELS - 1)), 0, LEVELS - 1); };
+
+    var picks = {
+      bust: idxOf(tOf(yb)),
+      waist: idxOf(tOf(L.waist.y)),
+      hip: idxOf(tOf(L.hip.y))
+    };
+    var out = { ratios: {}, cm: null, picks: picks };
+    Object.keys(picks).forEach(function (k) {
+      var i = picks[k];
+      var a = front.half[i], b = depth[i];
+      out.ratios[k] = { a: a, b: b, depthRatio: a > 0 ? b / a : 0, perim: ellipsePerimeter(a, b) };
+    });
+    if (heightCm && heightCm > 80 && heightCm < 230) {
+      // half[] 는 이미 "몸 전체 높이 대비" 비율이므로 키를 곱하면 cm가 된다
+      out.cm = {};
+      Object.keys(picks).forEach(function (k) {
+        out.cm[k] = out.ratios[k].perim * heightCm;
+      });
+    }
+    return out;
+  }
+
+  /* =======================================================================
+   * 4. 메인
+   *
+   * views[0] 이 정면. 나머지는 돌아선 컷(좌·우 순서는 상관없다).
+   * ===================================================================== */
+  function solve(views, opts) {
+    opts = opts || {};
+    var issues = [];
+    var profs = views.map(function (v) { return v ? profileOf(v.body) : null; });
+    var front = profs[0];
+    if (!front) {
+      return { ok: false, issues: [{ level: 'fatal', ko: '정면 사진에서 몸통을 인식하지 못했습니다.' }] };
+    }
+    var turned = [];
+    for (var t = 1; t < profs.length; t++) if (profs[t]) turned.push({ prof: profs[t], slot: t });
+    if (!turned.length) {
+      return {
+        ok: false, single: true, front: front,
+        issues: [{ level: 'info', ko: '옆모습 사진이 없어 앞뒤 두께는 계산하지 않았습니다. 왼쪽·오른쪽 옆모습을 한 장씩 더 올리면 두께와 둘레까지 잽니다.' }]
+      };
+    }
+
+    /* 각도는 기본 90°(옆모습). 사용자가 슬라이더로 바꾸면 그 값을 쓴다.
+     * 90° 근처에서는 각도 오차가 두께에 거의 영향을 주지 않는다. */
+    var angles = turned.map(function (tv, i) {
+      var g = opts.angles && opts.angles[i];
+      return clamp(g == null ? 90 : g, 20, 90);
+    });
+
+    var each = [], pen = 0;
+    for (var k = 0; k < turned.length; k++) {
+      var r = depthFrom(front.half, turned[k].prof.half, angles[k]);
+      if (!r) {
+        return { ok: false, issues: [{ level: 'fatal', ko: '옆모습에서 두께를 읽지 못했습니다.' }] };
+      }
+      each.push(r.b); pen += r.penalty;
+    }
+    pen /= turned.length;
+
+    var depthRaw = new Float64Array(LEVELS), spreadSum = 0;
+    for (var i2 = 0; i2 < LEVELS; i2++) {
+      var acc = 0;
+      for (var m = 0; m < each.length; m++) acc += each[m][i2];
+      depthRaw[i2] = acc / each.length;
+      if (each.length >= 2) spreadSum += Math.pow(each[0][i2] - each[1][i2], 2);
+    }
+    var spreadAbs = each.length >= 2 ? Math.sqrt(spreadSum / LEVELS) : null;
+
+    /* 두께 프로파일을 부드럽게 — 한 높이의 튐이 옷 전체를 흔들지 않게 */
+    var depth = smooth(depthRaw, 2);
+
+    var meanA = 0, meanB = 0;
+    for (var q = 0; q < LEVELS; q++) { meanA += front.half[q]; meanB += depth[q]; }
+    meanA /= LEVELS; meanB /= LEVELS;
+    var spreadRel = spreadAbs == null ? null : spreadAbs / Math.max(1e-6, meanA);
+    var penRel = pen / Math.max(1e-6, meanA);
+    var ratio = meanB / Math.max(1e-6, meanA);
+
+    /* 신뢰도는 모델이 매긴 확률이 아니라 **두 관측이 얼마나 맞아떨어졌는가**다 */
+    var conf = 0.86;
+    if (spreadRel != null) conf -= clamp(spreadRel * 1.8, 0, 0.55);
+    else { conf = Math.min(conf, 0.55); }
+    conf -= clamp(penRel * 1.2, 0, 0.35);
+
+    if (turned.length < 2) {
+      issues.push({ level: 'warn', ko: '옆모습이 한 장뿐이라 좌우 대조를 할 수 없습니다. 반대쪽도 올리면 두께를 검산할 수 있습니다.' });
+    }
+    if (spreadRel != null && spreadRel > 0.16) {
+      issues.push({ level: 'warn', ko: '왼쪽과 오른쪽에서 잰 두께가 ' + (spreadRel * 100).toFixed(0) +
+        '% 어긋납니다. 한쪽이 덜 돌아갔거나 자세가 틀어졌습니다 — 두께를 확정적으로 쓰지 마세요.' });
+      conf = Math.min(conf, 0.45);
+    }
+    /* b/a 가 사람의 범위를 벗어나면 "덜 돌아선 사진"이라는 뜻이다.
+     * 성인 몸통의 앞뒤 두께는 좌우 폭의 대략 절반~4분의 3이다. */
+    if (ratio > 0.95) {
+      issues.push({ level: 'warn', ko: '옆모습의 폭이 정면과 거의 같습니다. 덜 돌아선 사진일 가능성이 큽니다 — ' +
+        '몸을 완전히 옆으로 돌려 다시 찍거나, 아래 각도를 조절해 주세요.' });
+      conf = Math.min(conf, 0.30);
+    } else if (ratio < 0.38) {
+      issues.push({ level: 'warn', ko: '두께가 폭의 ' + (ratio * 100).toFixed(0) +
+        '% 로 이례적으로 얇습니다. 옆모습에서 몸통이 제대로 잡히지 않았을 수 있습니다.' });
+      conf = Math.min(conf, 0.40);
+    }
+    if (penRel > 0.06) {
+      issues.push({ level: 'warn', ko: '옆모습의 폭이 정면보다 넓게 나온 구간이 있습니다. 카메라 거리가 달라졌을 수 있습니다.' });
+    }
+
+    /* ── 머리로 "충분히 돌아섰는가"를 검사한다 ─────────────────────────
+     * 각도를 이것으로 **추정하지는 않는다.** 90° 근처에서 sin²θ 가 평평해
+     * 머리에서 나온 각도의 오차가 크고, 그 각도를 그대로 쓰면 90°로 두는
+     * 것보다 오히려 나빠진다. 대신 "덜 돌아선 사진"을 잡아내는 데만 쓴다.
+     *
+     *   w_head(θ)² = Hb²(cos²θ + k²sin²θ),  k = 앞뒤길이/좌우폭 ≈ 1.28
+     *   → r = w_turned/w_front 는 90°에서 1.28, 45°에서 1.15
+     * 두 값이 뚜렷이 갈리므로 45° 컷을 잡아낼 수 있다. */
+    var HEAD_K = 1.28;
+    if (front.head) {
+      var rs = [];
+      for (var hi = 0; hi < turned.length; hi++) {
+        var hw = turned[hi].prof.head;
+        if (hw) rs.push(hw / front.head);
+      }
+      if (rs.length) {
+        var rMean = rs.reduce(function (x, y2) { return x + y2; }, 0) / rs.length;
+        var s2 = clamp((rMean * rMean - 1) / (HEAD_K * HEAD_K - 1), 0, 1);
+        var headDeg = Math.asin(Math.sqrt(s2)) / DEG;
+        if (rMean < 1.19) {
+          issues.push({ level: 'warn', ko: '머리 폭으로 보면 약 ' + headDeg.toFixed(0) +
+            '° 밖에 돌아서지 않았습니다. 옆모습(90°)을 전제로 계산했으므로 두께가 ' +
+            '실제보다 크게 나옵니다 — 완전히 옆으로 돌아 다시 찍거나 아래 각도를 조절해 주세요.' });
+          conf = Math.min(conf, 0.35);
+        }
+      }
+    }
+
+    var circ = circumferences(front, depth, opts.heightCm);
+    if (opts.tape) calibrate(circ, opts.tape, issues);
+
+    return {
+      ok: true,
+      front: front, profiles: profs,
+      angles: angles,                           // 옆모습들의 각도(도) — 기본 90
+      depth: depth,                             // 높이별 반두께 (키 대비 비율)
+      halfFront: front.half,                    // 높이별 반폭   (키 대비 비율)
+      perSide: each,                            // 좌·우가 각각 내놓은 두께
+      depthRatio: ratio,                        // 몸통 평균 b/a
+      depthRatioAt: function (t) {              // 0=어깨 … 1=골반
+        var idx = clamp(t * (LEVELS - 1), 0, LEVELS - 1);
+        var i0 = Math.floor(idx), i1 = Math.min(LEVELS - 1, i0 + 1), f = idx - i0;
+        var a0 = front.half[i0], a1 = front.half[i1];
+        var r0 = a0 > 0 ? depth[i0] / a0 : ratio;
+        var r1 = a1 > 0 ? depth[i1] / a1 : ratio;
+        return clamp(r0 + (r1 - r0) * f, 0.25, 1.25);
+      },
+      spread: spreadRel, penalty: penRel,
+      confidence: clamp(conf, 0.05, 0.90),
+      circ: circ, levels: LEVELS, heightCm: opts.heightCm || null, issues: issues
+    };
+  }
+
+  /**
+   * 줄자 실측이 하나라도 있으면 그 비율로 나머지를 보정한다.
+   *
+   * 타원 둘레는 실제 몸통보다 대체로 작게 나온다 — 허리 단면이 타원보다
+   * 각져 있기 때문이다. 그 편차는 사람마다 다르지만 **한 사람 안에서는
+   * 높이별로 비슷하다.** 그래서 한 곳만 재면 나머지를 끌어올릴 수 있다.
+   * 없는 근거로 숫자를 만드는 것이 아니라, 있는 관측 하나를 최대한 쓰는 것이다.
+   */
+  function calibrate(circ, tape, issues) {
+    if (!circ.cm) return;
+    var keys = ['waist', 'bust', 'hip'], ref = null;
+    for (var i = 0; i < keys.length; i++) {
+      var v = parseFloat(tape[keys[i]]);
+      if (isFinite(v) && v > 40 && v < 200 && circ.cm[keys[i]] > 10) {
+        ref = { key: keys[i], tape: v, model: circ.cm[keys[i]] };
+        break;
+      }
+    }
+    if (!ref) return;
+    var k = ref.tape / ref.model;
+    if (k < 0.7 || k > 1.5) {
+      issues.push({ level: 'warn', ko: '사진에서 계산한 둘레와 줄자 값이 ' +
+        ((k - 1) * 100).toFixed(0) + '% 차이납니다. 키 입력이나 촬영 거리를 확인해 주세요.' });
+      return;
+    }
+    circ.calibration = { key: ref.key, factor: k, tape: ref.tape, before: ref.model };
+    Object.keys(circ.cm).forEach(function (kk) { circ.cm[kk] *= k; });
+    circ.cm[ref.key] = ref.tape;
+  }
+
+  function smooth(arr, win) {
+    var out = new Float64Array(arr.length);
+    for (var i = 0; i < arr.length; i++) {
+      var s = [], a = Math.max(0, i - win), b = Math.min(arr.length - 1, i + win);
+      for (var j = a; j <= b; j++) s.push(arr[j]);
+      s.sort(function (p, q) { return p - q; });
+      out[i] = s[s.length >> 1];
+    }
+    return out;
+  }
+
+  /* =======================================================================
+   * 5. 옷이 실제로 맞는가 — 둘레를 알게 되면서 처음 가능해진 판정
+   *
+   * 폭만 알 때는 "커 보인다/작아 보인다"밖에 말할 수 없었다. 둘레를 알면
+   * 여유분을 cm로 말할 수 있다.
+   * ===================================================================== */
+  var EASE_KO = [
+    { max: -2, key: 'tight', ko: '작습니다', note: '몸에 눌립니다. 한 치수 위를 권합니다.' },
+    { max: 4, key: 'snug', ko: '딱 맞습니다', note: '몸의 선이 그대로 드러납니다.' },
+    { max: 12, key: 'regular', ko: '적당합니다', note: '일반적인 착용감입니다.' },
+    { max: 22, key: 'relaxed', ko: '여유롭습니다', note: '편안하지만 실루엣은 흐려집니다.' },
+    { max: 1e9, key: 'oversized', ko: '많이 큽니다', note: '오버사이즈로 의도한 것이 아니라면 한 치수 아래를 권합니다.' }
+  ];
+
+  function fitVerdict(bodyCircCm, garmentCircCm) {
+    if (!bodyCircCm || !garmentCircCm) return null;
+    var ease = garmentCircCm - bodyCircCm;
+    for (var i = 0; i < EASE_KO.length; i++) {
+      if (ease <= EASE_KO[i].max) {
+        return { ease: ease, key: EASE_KO[i].key, ko: EASE_KO[i].ko, note: EASE_KO[i].note };
+      }
+    }
+    return null;
+  }
+
+  global.MULTIVIEW = {
+    LEVELS: LEVELS,
+    profileOf: profileOf, solve: solve, calibrate: calibrate,
+    depthFrom: depthFrom, ellipsePerimeter: ellipsePerimeter,
+    circumferences: circumferences, fitVerdict: fitVerdict, EASE_KO: EASE_KO
   };
 })(window);
 </script>
@@ -10609,7 +11275,7 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
   }
 
   /** fullReport 삽입 후 호출 */
-  function mountFullReport(root, dx, body, rec, feat, goal, fullImage) {
+  function mountFullReport(root, dx, body, rec, feat, goal, fullImage, fullState) {
     goal = goal || 'all';
     // 계절·핏 컨트롤은 한 번만 배선한다.
     // 탭 콜백 안에 두면 탭을 누를 때마다 리스너가 중복으로 쌓인다.
@@ -10625,7 +11291,8 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
         FITROOM.mount(root, {
           dx: dx, rec: rec, feat: feat,
           body: body, hasBody: !!(body && body.ok),
-          sourceImage: fullImage || null
+          sourceImage: fullImage || null,
+          full: fullState || null
         });
       }
     });
@@ -10846,6 +11513,8 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       (ctx.hasBody ?
       '<div class="fit-wrap">' +
         '<div class="fit-left">' +
+          '<div class="seg-row hidden" id="fitViewRow"><span class="seg-label">시점</span>' +
+            '<div class="seg" id="fitViewSeg"></div></div>' +
           '<div class="fit-stage" id="fitStage">' +
             '<canvas id="fitCanvas" aria-label="가상 피팅 결과"></canvas>' +
             '<div class="fit-wipe" id="fitWipeLine"></div>' +
@@ -10952,7 +11621,8 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       layers: { bottom: null, top: null, outer: null, dress: null },
       cat: 'top', style: '',
       ease: 1, lengthAdj: 0, shiftY: 0, lightAmount: 0.75, erase: true,
-      wipe: 1, busy: false, pending: false
+      wipe: 1, busy: false, pending: false,
+      views: [], viewIdx: 0, mv: (ctx.full && ctx.full.mv && ctx.full.mv.ok) ? ctx.full.mv : null
     };
 
     /* 저장된 내 옷 복원 */
@@ -10967,9 +11637,8 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
 
     /* 무거운 준비는 한 번만 */
     setTimeout(function () {
-      try {
-        S.body = TRYON.prepare(ctx.body, ctx.sourceImage, 900);
-      } catch (e) { S.body = null; }
+      buildViews(ctx);
+      S.body = S.views.length ? S.views[0].prep : null;
       if (!S.body) {
         host.querySelector('#fitStage').innerHTML =
           '<div class="fit-fail">전신 사진에서 몸의 위치를 잡지 못했습니다. ' +
@@ -10977,12 +11646,91 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
         return;
       }
       S.base = S.body.image;
+      renderViewSeg();
       /* 첫 화면은 추천 코디의 상의를 이미 입혀 둔다 — 빈 화면은 아무것도 알려주지 않는다 */
       var seed = suggestSeed(ctx);
       if (seed) { S.layers.top = seed.top; S.layers.bottom = seed.bottom; }
       syncSelection();
       recompose();
     }, 30);
+  }
+
+  /**
+   * 쓸 수 있는 모든 시점을 준비한다.
+   *
+   * 옆모습에서 잰 앞뒤 두께가 있으면 각 시점의 요 각도와 함께 넘겨,
+   * 옷이 몸을 원통처럼 감싸게 만든다(tryon.js 의 원통 감기).
+   * 두께가 없으면 기본 비율로 감되, 그것이 가정임을 화면에 밝힌다.
+   */
+  function buildViews(ctx) {
+    var full = ctx.full || {};
+    var raw = (full.views && full.views.length)
+      ? full.views
+      : [{ body: ctx.body, img: ctx.sourceImage }];
+    var mv = S.mv;
+    var depthFn = mv ? mv.depthRatioAt : null;
+    var KO = ['정면', '왼쪽 옆모습', '오른쪽 옆모습'];
+    var SIGN = [0, 1, -1];
+    var turnedSeen = 0;
+
+    for (var i = 0; i < raw.length && i < 3; i++) {
+      var v = raw[i];
+      if (!v || !v.body || !v.body.ok) continue;
+      var yaw = 0;
+      if (i > 0) {
+        var deg = mv && mv.angles && mv.angles[turnedSeen] != null ? mv.angles[turnedSeen] : 90;
+        yaw = SIGN[i] * deg;
+        turnedSeen++;
+      }
+      var prep;
+      try { prep = TRYON.prepare(v.body, v.img, 900); } catch (e) { prep = null; }
+      if (!prep) continue;
+      /* 이 시점에서 보이는 몸통 반폭 = √(a²cos²θ + b²sin²θ).
+       * 정면이면 a, 옆모습이면 b 다. 측정한 프로파일을 그대로 쓰므로
+       * 옷 폭과 몸 둘레가 같은 자로 재진다. */
+      var halfAt = null;
+      if (mv) {
+        var pxH = Math.max(1, prep.lm.bottom - prep.lm.top);
+        var th = yaw * Math.PI / 180, c2 = Math.cos(th) * Math.cos(th), s2 = Math.sin(th) * Math.sin(th);
+        halfAt = (function (n, aArr, bArr, H) {
+          return function (t) {
+            var idx = Math.max(0, Math.min(n - 1, t * (n - 1)));
+            var i0 = Math.floor(idx), i1 = Math.min(n - 1, i0 + 1), f = idx - i0;
+            var a = aArr[i0] + (aArr[i1] - aArr[i0]) * f;
+            var b = bArr[i0] + (bArr[i1] - bArr[i0]) * f;
+            return Math.sqrt(a * a * c2 + b * b * s2) * H;
+          };
+        })(mv.levels, mv.halfFront, mv.depth, pxH);
+      }
+      S.views.push({
+        ko: KO[i] || ('시점 ' + (i + 1)), yaw: yaw, prep: prep,
+        view: { yaw: yaw, depthRatioAt: depthFn, halfAt: halfAt },
+        result: null
+      });
+    }
+  }
+
+  function renderViewSeg() {
+    var row = S.root.querySelector('#fitViewRow');
+    var seg = S.root.querySelector('#fitViewSeg');
+    if (!row || !seg) return;
+    if (S.views.length < 2) { row.classList.add('hidden'); return; }
+    row.classList.remove('hidden');
+    seg.innerHTML = S.views.map(function (v, i) {
+      return '<button class="seg-btn' + (i === S.viewIdx ? ' on' : '') + '" data-view="' + i + '">' +
+        esc(v.ko) + '</button>';
+    }).join('');
+    seg.onclick = function (e) {
+      var b = e.target.closest('.seg-btn'); if (!b) return;
+      S.viewIdx = +b.dataset.view;
+      Array.prototype.forEach.call(seg.querySelectorAll('.seg-btn'), function (x) {
+        x.classList.toggle('on', x === b);
+      });
+      S.body = S.views[S.viewIdx].prep;
+      S.base = S.body.image;
+      S.result = S.views[S.viewIdx].result;
+      if (!S.result) recompose(); else paint();
+    };
   }
 
   /** 진단 결과에서 첫 착장을 고른다 */
@@ -11242,8 +11990,14 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     return out;
   }
 
+  /** 옷·색·핏이 바뀌면 모든 시점의 캐시를 버린다 */
+  function invalidateViews() {
+    S.views.forEach(function (v) { v.result = null; });
+  }
+
   function recompose() {
     if (!S || !S.body) return;
+    invalidateViews();
     if (S.busy) { S.pending = true; return; }
     S.busy = true;
     var spin = S.root.querySelector('#fitSpin');
@@ -11251,11 +12005,12 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
 
     // 렌더를 다음 프레임으로 미뤄야 스피너가 실제로 보인다
     requestAnimationFrame(function () { setTimeout(function () {
-      var res;
+      var res, cur = S.views[S.viewIdx];
       try {
         res = TRYON.compose(S.body, layerOrder(), {
           ease: S.ease, lengthAdj: S.lengthAdj, shiftY: S.shiftY,
-          lightAmount: S.lightAmount, eraseOriginal: S.erase
+          lightAmount: S.lightAmount, eraseOriginal: S.erase,
+          view: cur ? cur.view : null
         });
       } catch (e) {
         res = null;
@@ -11263,7 +12018,12 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
           '<div class="note fatal"><span class="ic">!</span><span>합성 중 오류가 났습니다: ' +
           esc(e.message) + '</span></div>';
       }
-      if (res) { S.result = res.imageData; renderReport(res.report); paint(); }
+      if (res) {
+        S.result = res.imageData;
+        if (cur) cur.result = res.imageData;
+        renderReport(res.report);
+        paint();
+      }
       if (spin) spin.classList.add('hidden');
       S.busy = false;
       if (S.pending) { S.pending = false; recompose(); }
@@ -11315,7 +12075,17 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
             ? '<span class="pill">색 ' + L.recolor.clusters.length + '개 군집</span>' : '') +
           '</span>';
       }
+      var fit = fitOf(L);
+      if (fit) {
+        h += '<span class="fit-rep-tags"><span class="pill ' +
+          (fit.key === 'regular' || fit.key === 'snug' ? 'ok' : fit.key === 'tight' ? 'bad' : '') +
+          '">' + esc(fit.ko) + ' · 여유 ' + (fit.ease >= 0 ? '+' : '') + fit.ease.toFixed(0) + 'cm</span></span>';
+      }
       h += '</div>';
+      if (fit) {
+        h += '<p class="hint fit-rep-note">' + esc(fit.note) +
+          ' <span class="mv-pct">사진 속 몸 둘레에는 그때 입고 있던 옷 두께가 포함됩니다.</span></p>';
+      }
     });
     h += '</div>';
 
@@ -11324,11 +12094,51 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
         return '<div class="note warn"><span class="ic">!</span><span>' + esc(w) + '</span></div>';
       }).join('');
     }
+    h += '<p class="hint">' + (S.mv
+      ? '옷이 몸을 감싸는 모양은 옆모습에서 <b>잰</b> 앞뒤 두께(폭의 ' +
+        (S.mv.depthRatio * 100).toFixed(0) + '%)를 씁니다.'
+      : '옆모습 사진이 없어 앞뒤 두께를 <b>표준 비율(폭의 72%)로 가정</b>했습니다. ' +
+        '3단계에서 옆모습을 올리면 실제로 잽니다.') + '</p>';
     h += '<p class="hint"><b>목표색 오차</b>는 "요청한 색"과 "실제로 나온 평균색"의 거리입니다. ' +
       '검은 가죽을 노랑으로 바꾸면 재질상 그만큼 밝아지지 않아 오차가 커집니다 — 실패가 아니라 ' +
       '그 소재에서 그 색이 그렇게 보인다는 뜻입니다. <b>질감 보존</b>은 변환 뒤에도 주름의 ' +
       '명암 폭이 얼마나 남았는지이며, 100%에 가까울수록 옷감처럼 보입니다.</p>';
     box.innerHTML = h;
+  }
+
+  /**
+   * 이 옷이 실제로 맞는가 — 둘레를 알게 되면서 처음 가능해진 판정.
+   *
+   * 두 번 틀렸다가 이렇게 정리했다.
+   *  1) "평평하게 편 옷의 폭 = 둘레의 절반"으로 계산 → 티셔츠가 −13cm.
+   *     우리 옷본의 반폭은 평평하게 편 폭이 아니라 **투영 반폭**이었다.
+   *  2) 화면에 그려진 앵커 폭에서 역산 → 이번엔 모든 옷이 작게 나왔다.
+   *     렌더는 체형을 0.6제곱으로 **감쇠해서** 따라가므로(그래야 자연스럽다)
+   *     가장 넓은 지점에서는 옷이 몸보다 좁게 그려진다. 보기 좋으라고 넣은
+   *     감쇠를 치수 계산에 끌어다 쓴 것이 잘못이었다.
+   *
+   * 그래서 렌더가 아니라 **옷이 선언한 치수감**에서 계산한다.
+   * 카탈로그의 fit 은 표준 핏 1.00 을 기준으로 한 상대 치수이고,
+   * 표준 핏의 여유분은 대략 8cm 다. 몸 둘레는 옆모습에서 잰 값이므로,
+   * 이 판정은 "이 컷의 옷을 당신의 실측 몸에 대면 얼마가 남는가"가 된다.
+   */
+  var BASE_EASE_CM = 8;
+
+  function fitOf(layer) {
+    var mv = S.mv;
+    if (!mv || !mv.circ || !mv.circ.cm || !mv.heightCm) return null;
+    var spec = GARMENTS.byId(layer.id);
+    if (!spec) return null;
+    // 사용자가 넣은 실제 옷 사진은 치수를 알 수 없다 — 지어내지 않는다
+    if (spec.userPhoto) return null;
+
+    var key = layer.cat === 'bottom' ? 'hip' : 'bust';
+    var bodyCm = mv.circ.cm[key];
+    if (!(bodyCm > 20)) return null;
+
+    var cut = (spec.fit || 1) * (S.ease || 1);
+    var garmentCm = bodyCm * cut + BASE_EASE_CM;
+    return MULTIVIEW.fitVerdict(bodyCm, garmentCm);
   }
 
   /* =======================================================================
@@ -11504,7 +12314,172 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     });
   }
 
-  global.FITROOM = { mount: mount, panelHTML: panelHTML };
+  /* =======================================================================
+   * 9. 앞뒤 두께 측정 패널 (3단계에 표시)
+   *
+   * 숫자를 늘어놓는 대신 **무엇이 측정이고 무엇이 가정인지** 구분해 보여준다.
+   * 두께는 잰 값이고, 둘레는 단면을 타원으로 가정해 환산한 값이다.
+   * ===================================================================== */
+  function mvPanel(host, sol, ctx) {
+    ctx = ctx || {};
+    var extra = (ctx.extra || []).map(function (i) {
+      return '<div class="note ' + (i.level === 'fatal' ? 'fatal' : 'warn') +
+        '"><span class="ic">!</span><span>' + esc(i.ko) + '</span></div>';
+    }).join('');
+
+    if (!sol || !sol.ok) {
+      host.innerHTML = extra + (ctx.hasSide ? '' :
+        '<p class="hint" style="margin-top:12px">옆모습을 한 장이라도 올리면 여기에 ' +
+        '<b>앞뒤 두께</b>와 <b>둘레</b>가 표시됩니다.</p>');
+      return;
+    }
+
+    var c = sol.circ, cm = c && c.cm;
+    var lv = sol.confidence >= 0.7 ? 'ok' : sol.confidence >= 0.45 ? '' : 'bad';
+    var h = '<div class="mv-panel">' +
+      '<h4 class="fit-h">앞뒤 두께 측정' +
+        '<span class="pill ' + lv + '">일치도 ' + (sol.confidence * 100).toFixed(0) + '%</span>' +
+        (sol.spread != null
+          ? '<span class="pill">좌우 편차 ' + (sol.spread * 100).toFixed(0) + '%</span>'
+          : '<span class="pill">옆모습 1장</span>') +
+      '</h4>' +
+      '<p class="hint">몸통의 앞뒤 두께가 좌우 폭의 <b>' + (sol.depthRatio * 100).toFixed(0) +
+        '%</b> 로 측정되었습니다. 이 값은 옆모습에서 <b>직접 잰</b> 것이라 ' +
+        '단면 모양을 어떻게 가정하든 달라지지 않습니다.</p>';
+
+    /* 두께 프로파일 — 숫자보다 모양이 빠르다 */
+    h += '<div class="mv-graph"><canvas id="mvGraph" width="520" height="120"></canvas>' +
+      '<div class="mv-legend"><span class="b">측정한 단면</span>' +
+      '<span class="g">옆모습 없을 때의 기본 가정(72%)</span></div>' +
+      '<p class="hint">위에서 내려다본 몸통 단면입니다. 가로가 좌우 폭, 세로가 앞뒤 두께입니다.</p></div>';
+
+    if (cm) {
+      /* 폭·두께는 키를 기준자로 삼아 cm로 바꾼다.
+       * half[] 가 이미 "몸 전체 높이 대비" 비율이므로 키를 곱하면 곧 cm다. */
+      var Hcm = sol.heightCm;
+      h += '<table class="mv-table"><thead><tr><th>부위</th><th>좌우 폭</th>' +
+        '<th>앞뒤 두께</th><th>둘레(추정)</th></tr></thead><tbody>';
+      [['bust', '가슴'], ['waist', '허리'], ['hip', '엉덩이']].forEach(function (r) {
+        var v = c.ratios[r[0]];
+        h += '<tr><td>' + r[1] + '</td>' +
+          '<td>' + (v.a * 2 * Hcm).toFixed(1) + ' cm</td>' +
+          '<td>' + (v.b * 2 * Hcm).toFixed(1) + ' cm <span class="mv-pct">(' +
+            (v.b / v.a * 100).toFixed(0) + '%)</span></td>' +
+          '<td><b>' + cm[r[0]].toFixed(1) + ' cm</b></td></tr>';
+      });
+      h += '</tbody></table>';
+      if (c.calibration) {
+        h += '<p class="hint">줄자로 잰 <b>' + esc(({ bust: '가슴', waist: '허리', hip: '엉덩이' })[c.calibration.key]) +
+          ' ' + c.calibration.tape.toFixed(1) + 'cm</b> 에 맞춰 나머지를 ' +
+          ((c.calibration.factor - 1) * 100).toFixed(1) + '% 보정했습니다. ' +
+          '타원 둘레는 실제 몸통보다 대체로 작게 나오는데, 그 편차는 한 사람 안에서는 비슷합니다.</p>';
+      } else {
+        h += '<p class="hint">둘레는 단면을 <b>타원으로 가정</b>해 환산한 값입니다. 실제 허리 단면은 ' +
+          '타원보다 각져 있어 이 값은 대체로 <b>작게</b> 나옵니다. 아래 실측에 한 곳만 넣으면 ' +
+          '그 비율로 나머지를 보정합니다.</p>';
+      }
+    } else {
+      h += '<p class="hint">둘레를 cm로 내려면 <b>키</b>가 필요합니다. 아래 실측 입력에 키를 넣어 주세요. ' +
+        '(두께 비율은 키 없이도 측정됩니다)</p>';
+    }
+
+    /* 각도 보정 — 자동값은 초안이고 사용자가 고칠 수 있다는 이 도구의 규칙 그대로 */
+    h += '<div class="mv-angles"><span class="seg-label">돌아선 각도</span>';
+    sol.angles.forEach(function (a, i) {
+      h += '<label class="fit-sl mv-ang"><span>' + (sol.angles.length > 1 ? (i ? '두 번째' : '첫 번째') : '옆모습') + '</span>' +
+        '<input type="range" data-ang="' + i + '" min="35" max="90" value="' + Math.round(a) + '">' +
+        '<b>' + Math.round(a) + '°</b></label>';
+    });
+    h += '</div><p class="hint">90°(완전한 옆모습)를 기본값으로 씁니다. ' +
+      '이 근처에서는 각도가 조금 틀려도 두께가 거의 변하지 않습니다 — 80°로만 돌아서도 오차는 ' +
+      '1~2% 입니다. 크게 비스듬히 섰다면 여기서 낮춰 주세요.</p>';
+
+    h += sol.issues.map(function (i) {
+      return '<div class="note ' + (i.level === 'fatal' ? 'fatal' : i.level === 'info' ? 'info' : 'warn') +
+        '"><span class="ic">' + (i.level === 'info' ? 'i' : '!') + '</span><span>' + esc(i.ko) + '</span></div>';
+    }).join('');
+    h += '</div>';
+
+    host.innerHTML = extra + h;
+    drawMvGraph(host, sol);
+
+    /* 패널은 다시 계산할 때마다 통째로 새로 그린다. addEventListener 로 붙이면
+     * 리스너가 계속 쌓이므로 대입으로 하나만 유지한다. */
+    host.oninput = function (e) {
+      var t = e.target;
+      if (!t.dataset || t.dataset.ang == null) return;
+      var lab = t.parentNode.querySelector('b');
+      if (lab) lab.textContent = t.value + '°';
+      var ang = sol.angles.slice();
+      ang[+t.dataset.ang] = +t.value;
+      // 좌우를 따로 준 적이 없으면 두 각도를 함께 움직인다 (보통 같이 돌아선다)
+      if (ang.length > 1 && !host._angTouched) {
+        for (var i = 0; i < ang.length; i++) ang[i] = +t.value;
+      }
+      host._angTouched = true;
+      clearTimeout(host._angT);
+      host._angT = setTimeout(function () { if (ctx.onAngles) ctx.onAngles(ang); }, 200);
+    };
+  }
+
+  /**
+   * 잰 것을 그대로 보여준다 — 몸통 **가로 단면** 세 개.
+   *
+   * 높이별 폭·두께를 꺾은선으로 그려 봤더니 변화 폭이 작아 두 줄이 나란히
+   * 붙어만 있었다. 정작 사용자가 알고 싶은 것은 "내 몸통이 얼마나 납작한가"이고,
+   * 그건 단면을 그려야 한 눈에 들어온다.
+   * 점선은 옆모습이 없을 때 쓰는 **기본 가정(폭의 72%)**이다. 실선과 점선이
+   * 벌어진 만큼이 이번 촬영으로 새로 알게 된 것이다.
+   */
+  function drawMvGraph(host, sol) {
+    var cv = host.querySelector('#mvGraph'); if (!cv) return;
+    var ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+
+    var picks = [['bust', '가슴'], ['waist', '허리'], ['hip', '엉덩이']];
+    var maxA = 0;
+    picks.forEach(function (p) {
+      var v = sol.circ.ratios[p[0]];
+      if (v) maxA = Math.max(maxA, v.a);
+    });
+    if (maxA <= 0) return;
+
+    var slotW = W / 3, cy = H * 0.46;
+    var scale = Math.min((slotW * 0.62) / (maxA * 2), (H * 0.52) / (maxA * 2));
+
+    picks.forEach(function (p, i) {
+      var v = sol.circ.ratios[p[0]]; if (!v) return;
+      var cx = slotW * (i + 0.5);
+      var rx = v.a * scale, ry = v.b * scale;
+
+      // 기본 가정(72%) — 점선
+      ctx.save();
+      ctx.setLineDash([3, 3]); ctx.lineWidth = 1.2;
+      ctx.strokeStyle = 'rgba(120,120,128,.55)';
+      ctx.beginPath(); ctx.ellipse(cx, cy, rx, v.a * 0.72 * scale, 0, 0, 6.2832); ctx.stroke();
+      ctx.restore();
+
+      // 측정값 — 실선
+      ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, 6.2832);
+      ctx.fillStyle = 'rgba(255,149,0,.16)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(255,149,0,.95)'; ctx.lineWidth = 2; ctx.stroke();
+
+      // 폭 화살표
+      ctx.strokeStyle = 'rgba(0,122,255,.85)'; ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(cx - rx, cy + ry + 7); ctx.lineTo(cx + rx, cy + ry + 7);
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(120,120,128,.95)';
+      ctx.font = '600 10px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(p[1], cx, 12);
+      ctx.font = '9px sans-serif';
+      ctx.fillText((v.b / v.a * 100).toFixed(0) + '%', cx, cy + ry + 20);
+    });
+    ctx.textAlign = 'left';
+  }
+
+  global.FITROOM = { mount: mount, panelHTML: panelHTML, mvPanel: mvPanel };
 })(window);
 </script>
 <script>
@@ -12180,28 +13155,106 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
   /* =====================================================================
    * 전신샷 처리
    * ===================================================================*/
-  wireDrop('#dropFull', '#fileFull', handleFull);
+  wireDrop('#dropFull', '#fileFull', function (f) { handleFullSlot(f, 0); });
+  wireDrop('#dropSideL', '#fileSideL', function (f) { handleFullSlot(f, 1); });
+  wireDrop('#dropSideR', '#fileSideR', function (f) { handleFullSlot(f, 2); });
 
-  function handleFull(file) {
-    var drop = $('#dropFull');
-    drop.querySelector('.t').textContent = '분석 중…';
-    announce('사진을 분석하고 있습니다.');
+  var SLOT_KO = ['정면', '왼쪽 옆모습', '오른쪽 옆모습'];
+  var SLOT_DROP = ['#dropFull', '#dropSideL', '#dropSideR'];
+
+  function handleFullSlot(file, slot) {
+    var drop = $(SLOT_DROP[slot]);
+    var label = drop.querySelector('.t'), was = label.textContent;
+    label.textContent = '분석 중…';
+    announce(SLOT_KO[slot] + ' 사진을 분석하고 있습니다.');
+
     loadImage(file).then(function (img) {
-      drop.querySelector('.t').textContent = '전신 사진을 여기에 놓거나 클릭해 선택';
+      label.textContent = SLOT_KO[slot];
       var body = BODY.analyzeFull(img, { gender: state.opts.gender });
-      $('#fullPreview').classList.remove('hidden');
-      $('#fullIssues').innerHTML = issuesHtml(body.issues);
-      if (!body.ok) { $('#go4').disabled = true; return; }
-      $('#go4').disabled = false;
-      // 원본 이미지를 함께 들고 있는다. 체형 분석은 640px면 충분하지만
-      // 가상 피팅은 눈으로 보는 결과물이라 그 해상도로는 거칠다.
-      state.full = { work: body.work, body: body, img: img, lines: cloneLines(body.landmarks) };
-      drawFull();
-      $('#fullSummary').innerHTML = REPORT.bodySummary(body);
+
+      if (!state.full) state.full = { views: [null, null, null] };
+      if (!state.full.views) state.full.views = [null, null, null];
+
+      if (slot === 0) {
+        $('#fullPreview').classList.remove('hidden');
+        $('#fullIssues').innerHTML = issuesHtml(body.issues);
+        if (!body.ok) { $('#go4').disabled = true; return; }
+        $('#go4').disabled = false;
+        // 원본 이미지를 함께 들고 있는다. 체형 분석은 640px면 충분하지만
+        // 가상 피팅은 눈으로 보는 결과물이라 그 해상도로는 거칠다.
+        state.full.work = body.work;
+        state.full.body = body;
+        state.full.img = img;
+        state.full.lines = cloneLines(body.landmarks);
+        drawFull();
+        $('#fullSummary').innerHTML = REPORT.bodySummary(body);
+      } else if (!body.ok) {
+        // 옆모습은 선택이므로 전체를 막지 않는다. 이 컷만 버린다.
+        state.full.views[slot] = null;
+        drawSlotThumb(slot, null);
+        renderMvPanel([{ level: 'warn', ko: SLOT_KO[slot] + '에서 몸을 인식하지 못해 이 사진은 쓰지 않습니다. 단색 배경에서 발끝까지 나오게 다시 찍어 주세요.' }]);
+        return;
+      }
+
+      state.full.views[slot] = { img: img, body: body };
+      drawSlotThumb(slot, body);
+      runMultiview();
     }).catch(function (err) {
-      drop.querySelector('.t').textContent = '전신 사진을 여기에 놓거나 클릭해 선택';
-      $('#fullPreview').classList.remove('hidden');
-      $('#fullIssues').innerHTML = issuesHtml([{ level: 'fatal', ko: '파일을 읽지 못했습니다: ' + err.message }]);
+      label.textContent = was;
+      if (slot === 0) {
+        $('#fullPreview').classList.remove('hidden');
+        $('#fullIssues').innerHTML = issuesHtml([{ level: 'fatal', ko: '파일을 읽지 못했습니다: ' + err.message }]);
+      } else {
+        renderMvPanel([{ level: 'fatal', ko: SLOT_KO[slot] + ' 파일을 읽지 못했습니다: ' + err.message }]);
+      }
+    });
+  }
+
+  /** 슬롯에 작은 미리보기 — 어떤 사진을 넣었는지 눈으로 확인되어야 한다 */
+  function drawSlotThumb(slot, body) {
+    var cv = $(SLOT_DROP[slot]).querySelector('.mv-thumb');
+    if (!cv) return;
+    if (!body) { cv.classList.add('hidden'); return; }
+    var src = body.work.canvas;
+    var hgt = 74, sc = hgt / src.height;
+    cv.width = Math.max(1, Math.round(src.width * sc));
+    cv.height = hgt;
+    cv.getContext('2d').drawImage(src, 0, 0, cv.width, cv.height);
+    cv.classList.remove('hidden');
+    $(SLOT_DROP[slot]).classList.add('filled');
+  }
+
+  /** 옆모습이 하나라도 있으면 앞뒤 두께를 계산한다 */
+  function runMultiview(angles) {
+    var f = state.full;
+    if (!f || !f.views || !f.views[0]) return;
+    if (!f.views[1] && !f.views[2]) { renderMvPanel(); return; }
+    var hEl = $('#mHeight');
+    var opts = {
+      heightCm: hEl && hEl.value ? parseFloat(hEl.value) : null,
+      angles: angles || state.mvAngles || null,
+      tape: {
+        bust: ($('#mBust') || {}).value, waist: ($('#mWaist') || {}).value,
+        hip: ($('#mHip') || {}).value
+      }
+    };
+    try {
+      f.mv = MULTIVIEW.solve(f.views, opts);
+    } catch (e) {
+      f.mv = null;
+      renderMvPanel([{ level: 'fatal', ko: '두께 계산 중 오류가 났습니다: ' + e.message }]);
+      return;
+    }
+    if (angles) state.mvAngles = angles;
+    renderMvPanel();
+  }
+
+  function renderMvPanel(extra) {
+    var host = $('#mvPanel'); if (!host) return;
+    FITROOM.mvPanel(host, state.full && state.full.mv, {
+      extra: extra || [],
+      hasSide: !!(state.full && state.full.views && (state.full.views[1] || state.full.views[2])),
+      onAngles: function (ang) { runMultiview(ang); }
     });
   }
 
@@ -12365,7 +13418,7 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       function () { el.innerHTML = REPORT.fullReport(b.dx, bodyOk, state.rec, b.feat, state.opts.goal, state.compare, state.measures); },
       function () {
         REPORT.mountFullReport(el, b.dx, bodyOk, state.rec, b.feat, state.opts.goal,
-          state.full ? state.full.img : null);
+          state.full ? state.full.img : null, state.full || null);
         var p = $('#btnPrint'), j = $('#btnJson'), s = $('#btnShareDl');
         if (p) p.onclick = function () { window.print(); };
         if (j) j.onclick = downloadJson;
@@ -12481,6 +13534,11 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
   }
   $('#reBust').onclick = function () { $('#fileBust').value = ''; $('#fileBust').click(); };
   $('#reFull').onclick = function () { $('#fileFull').value = ''; $('#fileFull').click(); };
+  // 키를 넣으면 둘레를 cm로 낼 수 있게 된다 — 넣는 즉시 다시 계산한다
+  ['#mHeight', '#mBust', '#mWaist', '#mHip'].forEach(function (id) {
+    var el = $(id);
+    if (el) el.addEventListener('change', function () { runMultiview(); });
+  });
 
   $('#btnReset').onclick = function () {
     if (!confirm('처음부터 다시 시작할까요? 지금까지의 분석 결과가 사라집니다.')) return;
@@ -12488,6 +13546,15 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     $('#bustPreview').classList.add('hidden');
     $('#fullPreview').classList.add('hidden');
     $('#fileBust').value = ''; $('#fileFull').value = '';
+    ['#fileSideL', '#fileSideR'].forEach(function (id) { if ($(id)) $(id).value = ''; });
+    state.mvAngles = null;
+    SLOT_DROP.forEach(function (d, i) {
+      var el = $(d); if (!el) return;
+      el.classList.remove('filled');
+      var c = el.querySelector('.mv-thumb'); if (c) c.classList.add('hidden');
+      var t = el.querySelector('.t'); if (t) t.textContent = SLOT_KO[i];
+    });
+    if ($('#mvPanel')) $('#mvPanel').innerHTML = '';
     go(0);
   };
 

@@ -445,7 +445,7 @@
     var lastL = -1, lastR = -1;
     for (var y = Math.max(0, L.shoulder.y); y < Math.min(h, L.bottom); y++) {
       var r = body.rows[y];
-      if (r.cx0 < 0) continue;
+      if (!r || r.cx0 < 0) continue;
       if (r.cx0 - r.x0 > gap) lastL = y;
       if (r.x1 - r.cx1 > gap) lastR = y;
     }
@@ -474,12 +474,19 @@
     Object.keys(lm).forEach(function (k) {
       out[k] = (lm[k] && typeof lm[k] === 'object') ? { y: lm[k].y, w: lm[k].w } : lm[k];
     });
+    /* 반드시 정수로 남긴다.
+     * 이 값들은 곧바로 rows[y] 의 색인이 되는데, clamp 의 경계가 소수라
+     * 결과도 소수가 되면 rows[202.9] 가 undefined 로 나와 조용히 터진다.
+     * 정면에서는 값이 범위 안이라 clamp 가 걸리지 않아 드러나지 않다가,
+     * 옆모습에서 처음 터졌다. */
     var top = out.top, bot = out.bottom, H = Math.max(1, bot - top);
-    out.chinY = clamp(out.chinY, top, top + H * 0.26);
-    out.shoulder.y = clamp(out.shoulder.y, out.chinY + H * 0.015, top + H * 0.30);
-    out.waist.y = clamp(out.waist.y, out.shoulder.y + H * 0.10, top + H * 0.52);
-    out.hip.y = clamp(out.hip.y, out.waist.y + H * 0.04, top + H * 0.64);
-    if (out.bust) out.bust.y = clamp(out.bust.y, out.shoulder.y + H * 0.03, out.waist.y - H * 0.01);
+    out.chinY = Math.round(clamp(out.chinY, top, top + H * 0.26));
+    out.shoulder.y = Math.round(clamp(out.shoulder.y, out.chinY + H * 0.015, top + H * 0.30));
+    out.waist.y = Math.round(clamp(out.waist.y, out.shoulder.y + H * 0.10, top + H * 0.52));
+    out.hip.y = Math.round(clamp(out.hip.y, out.waist.y + H * 0.04, top + H * 0.64));
+    if (out.bust) {
+      out.bust.y = Math.round(clamp(out.bust.y, out.shoulder.y + H * 0.03, out.waist.y - H * 0.01));
+    }
     return out;
   }
 
@@ -493,10 +500,15 @@
     var lenAdj = opts.lengthAdj == null ? 0 : opts.lengthAdj;    // 기장 ±
     var shift = opts.shiftY == null ? 0 : opts.shiftY;
 
+    var mvHalfB = opts.halfAt || null;
     function pair(y, halfScale, core) {
       var s = spanAt(body, y, core !== false);
-      var half = (s.w / 2) * halfScale;
-      return { cx: s.cx, y: y, L: [s.cx - half, y], R: [s.cx + half, y] };
+      /* 하의도 옆모습 프로파일이 있으면 그쪽을 쓴다. 골반 높이에서 실루엣
+       * 폭을 그대로 읽으면 손끝이 걸려 골반이 통째로 넓어진다. */
+      var base = mvHalfB
+        ? mvHalfB(clamp((y - L.shoulder.y) / Math.max(1, L.hip.y - L.shoulder.y), 0, 1))
+        : s.w / 2;
+      return { cx: s.cx, y: y, L: [s.cx - base * halfScale, y], R: [s.cx + base * halfScale, y] };
     }
 
     if (spec.cat === 'bottom') {
@@ -563,6 +575,18 @@
 
     var axis = centerAxis(body, L);
 
+    /* 몸통 반폭의 출처.
+     * 옆모습을 재 두었으면 그 프로파일을 쓴다 — body.js 의 랜드마크 폭은
+     * "어깨~허리 사이 최대 폭"이라 팔이 몸에 닿으면 부풀어 오르는데,
+     * multiview 쪽은 분위수로 그 오염을 걷어낸 값이라 더 안정적이다.
+     * 두 값이 다르면 옷 둘레와 몸 둘레가 어긋나 핏 판정이 틀어진다 —
+     * 티셔츠가 실제보다 20% 크게 나왔던 원인이다.
+     * 옆모습 시점에서는 보이는 폭이 곧 두께이므로 투영식으로 바꿔 준다. */
+    var mvHalf = opts.halfAt || null;
+    var halfOf = mvHalf
+      ? function (y) { return mvHalf(clamp((y - L.shoulder.y) / Math.max(1, L.hip.y - L.shoulder.y), 0, 1)); }
+      : function (y) { return torsoHalf(L, y); };
+
     /* ── 가로 폭 : 옷본의 폭 프로파일을 몸 크기로 옮기고, 체형은 **감쇠해서**
      *   섞는다.
      *
@@ -583,13 +607,16 @@
       [gA.waistL[1], gG.waistHalf],
       [gA.hemL[1],   gG.hemHalf]
     ];
-    var bodyAtLv = gLevels.map(function (lv) { return torsoHalf(L, mapY(lv[0])); });
+    var bodyAtLv = gLevels.map(function (lv) { return halfOf(mapY(lv[0])); });
     var gMed = CC.median(gLevels.map(function (lv) { return lv[1]; })) || 1;
     var bMed = CC.median(bodyAtLv) || 1;
-    var sizeScale = bMed / gMed;
+    /* 옷의 치수감(spec.fit)을 되살린다.
+     * 옷본의 중앙값으로 나누면 옷본에 들어 있던 fit 계수가 그대로 약분돼,
+     * 슬림 티셔츠와 오버핏 후디가 **같은 폭으로** 그려졌다. 다시 곱해 준다. */
+    var sizeScale = (bMed / gMed) * (spec.fit || 1);
 
     function halfFor(gy, gHalf) {
-      var shapeR = Math.pow(clamp(torsoHalf(L, mapY(gy)) / bMed, 0.40, 2.2), DAMP);
+      var shapeR = Math.pow(clamp(halfOf(mapY(gy)) / bMed, 0.40, 2.2), DAMP);
       return gHalf * sizeScale * shapeR * ease;
     }
     function pairAt(gy, gHalf) {
@@ -665,7 +692,7 @@
     var cs = [];
     for (var y = Math.max(0, L.shoulder.y); y <= Math.min(body.h - 1, L.hip.y); y++) {
       var r = body.rows[y];
-      if (r.cx0 >= 0) cs.push((r.cx0 + r.cx1) / 2);
+      if (r && r.cx0 >= 0) cs.push((r.cx0 + r.cx1) / 2);
     }
     if (!cs.length) return (body._axis = body.w / 2);
     cs.sort(function (a, b) { return a - b; });
@@ -694,6 +721,65 @@
       }
     }
     return pts[pts.length - 1][1];
+  }
+
+  /* =======================================================================
+   * 4-b. 원통 감기 (cylindrical wrap)
+   *
+   * 지금까지는 옷본의 가로 좌표를 실루엣 폭에 **선형으로** 폈다. 그러면 옷이
+   * 몸을 감싸는 게 아니라 앞에 납작하게 붙는다. 몸통은 원기둥에 가까우므로
+   * 실제로는 옆으로 갈수록 천이 급격히 줄어들어 보여야 한다.
+   *
+   * 단면을 반폭 a · 반두께 b 인 타원으로 두고 몸이 θ 만큼 돌아섰다고 하자.
+   * 표면의 각위치 φ(0=정면 중앙, ±90°=옆선)에 있는 점이 화면에 찍히는 곳은
+   *
+   *      X(φ) = a·sinφ·cosθ + b·cosφ·sinθ = R·sin(φ + δ)
+   *      R = √(a²cos²θ + b²sin²θ)  (= 관측되는 반폭)
+   *      δ = atan2(b·sinθ, a·cosθ)
+   *
+   * 이므로, 실루엣 안의 정규화 위치 t = X/R 에서 거꾸로
+   *
+   *      φ = asin(t) − δ
+   *
+   * 를 얻는다. b/a 는 옆모습 사진에서 **잰 값**을 쓴다(multiview.js).
+   * 옆모습이 없으면 0.72 를 쓰되, 그때는 이 값이 가정임을 화면에 밝힌다.
+   *
+   * |φ| > 90° 는 옷본에 없는 뒷면이다. 접어서 되비추면(중앙 앞섶이 중앙 뒤로
+   * 간다) 대칭 의류에서는 자연스럽게 이어진다.
+   * ===================================================================== */
+  var DEFAULT_DEPTH_RATIO = 0.72;
+
+  function wrapU(t, delta) {
+    var phi = Math.asin(clamp(t, -1, 1)) - delta;      // 라디안
+    var u = phi / (Math.PI / 2);                       // −1 … +1 이 앞면
+    if (u > 1) u = 2 - u;                              // 뒷면을 접어 되비춘다
+    else if (u < -1) u = -2 - u;
+    return clamp(u, -1, 1);
+  }
+
+  /** 옷본의 높이별 반폭 — 감기 좌표를 정규화하는 데 쓴다 */
+  function garmentHalfFn(G, spec) {
+    var A = G.anchors, lv = [];
+    var keys = spec.cat === 'bottom'
+      ? [['waistL', 'waistR'], ['hipL', 'hipR'], ['hemL', 'hemR']]
+      : [['neckL', 'neckR'], ['shL', 'shR'], ['pitL', 'pitR'],
+         ['chestL', 'chestR'], ['waistL', 'waistR'], ['hemL', 'hemR']];
+    keys.forEach(function (kk) {
+      var l = A[kk[0]], r = A[kk[1]];
+      if (l && r) lv.push([(l[1] + r[1]) / 2, (r[0] - l[0]) / 2]);
+    });
+    if (!lv.length) return null;
+    lv.sort(function (a, b) { return a[0] - b[0]; });
+    return function (gy) {
+      if (gy <= lv[0][0]) return lv[0][1];
+      for (var i = 1; i < lv.length; i++) {
+        if (gy <= lv[i][0]) {
+          var t = (gy - lv[i - 1][0]) / Math.max(1, lv[i][0] - lv[i - 1][0]);
+          return lv[i - 1][1] + (lv[i][1] - lv[i - 1][1]) * t;
+        }
+      }
+      return lv[lv.length - 1][1];
+    };
   }
 
   /* =======================================================================
@@ -807,7 +893,9 @@
         pb.dst.push(anchors.crotchC); pb.src.push(G.anchors.crotchC);
       }
       if (!anchors.legL || !G.anchors.legL) {
-        if (pb.dst.length >= 4) parts.push({ name: 'bottom', dst: pb.dst, src: pb.src, test: null });
+        if (pb.dst.length >= 4) {
+          parts.push({ name: 'bottom', dst: pb.dst, src: pb.src, test: null, wrap: true });
+        }
         return parts;
       }
 
@@ -821,7 +909,7 @@
       });
       // 엉덩이·허리 블록은 가랑이 위쪽만 맡는다
       parts.push({
-        name: 'seat', dst: pb.dst, src: pb.src,
+        name: 'seat', dst: pb.dst, src: pb.src, wrap: true,
         clampFn: function (uv) { if (uv[1] > gCrotch) uv[1] = gCrotch; }
       });
       return parts;
@@ -854,7 +942,8 @@
        * 그래서 **몸 쪽에서도** 울타리를 쳐야 한다. 없으면 팔뚝처럼 몸통
        * 바깥이면서 인물 안쪽인 자리에 몸통 천이 얹혀, 손목에 천 조각이
        * 붙은 것처럼 보인다. 울타리는 대응점이 만든 몸통 폭 자체다. */
-      bodyTest: torsoBound(anchors)
+      bodyTest: torsoBound(anchors),
+      wrap: true
     });
     return parts;
 
@@ -1020,7 +1109,7 @@
           if (!reveal[p2]) continue;
           var isLeg = legHem != null && y2 > legHem + 2;
           var core = body.rows[y2];
-          var outOfTorso = core.cx0 < 0 || x2 < core.cx0 - 1 || x2 > core.cx1 + 1;
+          var outOfTorso = !core || core.cx0 < 0 || x2 < core.cx0 - 1 || x2 > core.cx1 + 1;
           var isArm = sleeveEnd != null && y2 > sleeveEnd + 2 && outOfTorso;
           if (!isLeg && !isArm) continue;
           var lf2 = clamp(body.light[p2] / lmeanB, 0.68, 1.34);
@@ -1085,7 +1174,11 @@
     var gd = gimg.data;
 
     /* --- 대응점 : 몸통 / 왼소매 / 오른소매 --- */
-    var anchors = bodyAnchors(body, spec, layer.opts || gopts || {}, G);
+    var aopts = layer.opts || gopts || {};
+    if (gopts && gopts.view && gopts.view.halfAt && !aopts.halfAt) {
+      aopts = Object.assign({}, aopts, { halfAt: gopts.view.halfAt });
+    }
+    var anchors = bodyAnchors(body, spec, aopts, G);
     if (!anchors) return null;
     var parts = buildParts(spec, G, anchors);
     if (!parts.length) return null;
@@ -1101,6 +1194,23 @@
     var lmean = meanLightOver(body, allow, anchors);
     var lightAmt = gopts && gopts.lightAmount != null ? gopts.lightAmount : 0.75;
     var neckY = anchors._neckY != null ? anchors._neckY : -1;
+
+    /* ── 원통 감기 준비 ──
+     * 옷본 좌표를 몸의 단면 형상에 맞춰 다시 배치한다. 옆모습에서 잰
+     * 두께가 있으면 그 값을, 없으면 기본 비율을 쓴다. */
+    var view = (gopts && gopts.view) || null;
+    var yawDeg = view && view.yaw != null ? view.yaw : 0;
+    var wrapAmt = gopts && gopts.wrap != null ? gopts.wrap : 1;
+    var gHalfFn = wrapAmt > 0.01 ? garmentHalfFn(G, spec) : null;
+    var gcxW = G.geom.cx;
+    var yawRad = yawDeg * Math.PI / 180;
+    var depthAt = view && view.depthRatioAt
+      ? view.depthRatioAt
+      : function () { return DEFAULT_DEPTH_RATIO; };
+    // 높이(몸 좌표)를 어깨=0 · 밑단=1 로 정규화해 두께 비를 읽는다
+    var wTop = anchors._shY != null ? anchors._shY : anchors._topY;
+    var wBot = anchors._hemY != null ? anchors._hemY : (wTop + 1);
+    var wSpan = Math.max(1, wBot - wTop);
 
     /* 조각끼리 겹치는 진동(어깨) 부근을 두 번 칠하지 않게 한다 */
     var done = new Uint8Array(w * h);
@@ -1132,6 +1242,22 @@
           if (body.skin[p] && neckY >= 0 && y < neckY + 2) continue;
 
           field(x, y, uv);
+
+          /* 몸통에만 원통 감기를 적용한다. 소매는 팔이라는 훨씬 가는
+           * 원기둥이라 같은 식을 쓰면 과하게 눌린다. */
+          if (gHalfFn && part.wrap) {
+            var hg = gHalfFn(uv[1]);
+            if (hg > 1) {
+              var tt = (uv[0] - gcxW) / hg;
+              if (tt > -1.6 && tt < 1.6) {
+                var br = depthAt(clamp((y - wTop) / wSpan, 0, 1));
+                var dl = Math.atan2(br * Math.sin(yawRad), Math.cos(yawRad));
+                var uw = wrapU(tt, dl);
+                uv[0] = gcxW + (uw * wrapAmt + tt * (1 - wrapAmt)) * hg;
+              }
+            }
+          }
+
           // 이 조각이 맡은 옷본 영역으로 좌표를 정리한다.
           // 소매는 벗어나면 버리고(정확도 우선), 몸통은 잘라서 읽는다(구멍 방지).
           if (clampFn) clampFn(uv);
@@ -1256,6 +1382,7 @@
     solveTPS: solveTPS, warpField: warpField, paletteFor: paletteFor,
     HEM_BODY: HEM_BODY, KEYS_TOP: KEYS_TOP, KEYS_BOTTOM: KEYS_BOTTOM,
     saneLM: saneLM, buildParts: buildParts, limbEdges: limbEdges,
+    wrapU: wrapU, garmentHalfFn: garmentHalfFn, DEFAULT_DEPTH_RATIO: DEFAULT_DEPTH_RATIO,
     clearTintCache: function () { _tintCache = []; }
   };
 })(window);

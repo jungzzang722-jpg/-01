@@ -124,3 +124,63 @@
   border-radius: var(--r-ctl); border: 1px solid var(--ctl-border);
   background: var(--ctl); color: var(--label);
 }
+
+/* =========================================================================
+ * 다각도 촬영 (3단계) · 앞뒤 두께 측정
+ * ========================================================================= */
+.mv-slots {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+}
+@media (max-width: 640px) { .mv-slots { grid-template-columns: 1fr; } }
+
+.mv-drop { position: relative; padding: 16px 10px 14px; min-height: 150px; }
+.mv-drop .big { margin-bottom: 4px; }
+.mv-drop .t { font-size: 13px; }
+.mv-drop .d { font-size: 11px; }
+.mv-drop.filled { border-style: solid; border-color: var(--blue); background: var(--accent-soft); }
+
+.mv-tag {
+  position: absolute; top: 8px; right: 9px; font-size: 9.5px; font-weight: 600;
+  padding: 2px 7px; border-radius: 99px; background: var(--fill-3); color: var(--label-2);
+}
+.mv-tag.req { background: var(--accent-soft); color: var(--blue); }
+
+.mv-thumb {
+  display: block; margin: 8px auto 0; border-radius: var(--r-in);
+  box-shadow: var(--sh-card); max-height: 74px; width: auto;
+}
+
+.mv-panel {
+  margin-top: 16px; padding: 14px 16px; border-radius: var(--r-box);
+  background: var(--win-2); border: 1px solid var(--separator);
+}
+.mv-panel .fit-h { margin-top: 0; }
+
+.mv-graph { position: relative; margin: 10px 0 6px; }
+.mv-graph canvas { width: 100%; height: auto; display: block; max-width: 520px; margin: 0 auto; }
+.mv-legend { display: flex; gap: 14px; font-size: 10.5px; color: var(--label-2); }
+.mv-legend span::before {
+  content: ''; display: inline-block; width: 10px; height: 2.5px;
+  border-radius: 2px; margin-right: 5px; vertical-align: middle;
+}
+.mv-legend .b::before { background: var(--orange); }
+.mv-legend .g::before {
+  background: transparent; height: 0;
+  border-top: 1.5px dashed rgba(120,120,128,.75);
+}
+
+.mv-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 10px 0 4px; }
+.mv-table th {
+  text-align: left; font-weight: 600; font-size: 10.5px; color: var(--label-2);
+  padding: 4px 6px; border-bottom: 1px solid var(--separator);
+}
+.mv-table td { padding: 5px 6px; border-bottom: 1px solid var(--separator); }
+.mv-table tr:last-child td { border-bottom: none; }
+.mv-table td:not(:first-child) { font-variant-numeric: tabular-nums; }
+
+.mv-angles { margin-top: 12px; display: grid; gap: 7px; }
+.mv-ang { grid-template-columns: 62px 1fr 40px; }
+
+.fit-rep-note { margin: -2px 0 6px 24px; font-size: 11px; }
+
+.mv-pct { color: var(--label-3); font-size: 10.5px; }
