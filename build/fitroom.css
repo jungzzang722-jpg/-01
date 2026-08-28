@@ -1,0 +1,126 @@
+
+/* =========================================================================
+ * 가상 피팅 (fitroom)
+ * ========================================================================= */
+.fit-wrap {
+  display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 20px; align-items: start; margin-top: 16px;
+}
+@media (max-width: 900px) { .fit-wrap { grid-template-columns: 1fr; } }
+
+.fit-stage {
+  position: relative; border-radius: var(--r-box); overflow: hidden;
+  background: var(--win-2); box-shadow: var(--sh-card);
+  display: flex; align-items: center; justify-content: center; min-height: 220px;
+}
+.fit-stage canvas { display: block; width: 100%; height: auto; }
+.fit-fail { padding: 34px 18px; font-size: 13px; color: var(--label-2); text-align: center; line-height: 1.6; }
+
+.fit-wipe {
+  position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px;
+  background: rgba(255,255,255,.9); box-shadow: 0 0 0 1px rgba(0,0,0,.28);
+  pointer-events: none; transition: opacity .2s var(--ease);
+}
+.fit-tagl, .fit-tagr {
+  position: absolute; top: 8px; font-size: 10.5px; font-weight: 600;
+  padding: 3px 8px; border-radius: 99px; pointer-events: none;
+  background: rgba(0,0,0,.46); color: #fff; backdrop-filter: blur(6px);
+}
+.fit-tagl { right: 8px; }        /* 오른쪽이 원본 */
+.fit-tagr { left: 8px; }         /* 왼쪽이 피팅 결과 */
+
+.fit-spin { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.14); }
+.fit-spin span {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2.5px solid rgba(255,255,255,.35); border-top-color: #fff;
+  animation: fitspin .8s linear infinite;
+}
+@keyframes fitspin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .fit-spin span { animation-duration: 2.4s; } }
+
+.fit-range { width: 100%; margin: 10px 0 2px; }
+.fit-hint { margin-bottom: 12px; }
+
+.fit-sliders { display: grid; gap: 9px; margin-top: 6px; }
+.fit-sl { display: grid; grid-template-columns: 52px 1fr 62px; align-items: center; gap: 10px; font-size: 12px; }
+.fit-sl > span { color: var(--label-2); }
+.fit-sl > b { font-size: 11.5px; color: var(--label-2); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.fit-sl input[type=range] { width: 100%; }
+
+.fit-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; margin-top: 12px; flex-wrap: wrap; }
+.fit-check .hint { margin: 0; }
+
+.fit-styles { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+.chip {
+  font-size: 11.5px; padding: 4px 10px; border-radius: 99px; cursor: pointer;
+  background: var(--fill-3); color: var(--label-2); border: none;
+  font-family: inherit; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.chip:hover { background: var(--fill-2); }
+.chip.on { background: var(--blue); color: #fff; }
+
+.fit-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(94px, 1fr));
+  gap: 8px; max-height: 340px; overflow-y: auto; padding: 2px;
+  border: 1px solid var(--separator); border-radius: var(--r-box);
+  padding: 8px; background: var(--win-2);
+}
+.fit-item {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 4px 7px; border-radius: var(--r-in); cursor: pointer;
+  background: var(--win); border: 1.5px solid transparent; font-family: inherit;
+  transition: border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.fit-item:hover { transform: translateY(-1px); border-color: var(--ctl-border); }
+.fit-item.on { border-color: var(--blue); background: var(--accent-soft); }
+.fit-thumb { display: block; height: 64px; display: grid; place-items: center; }
+.fit-thumb canvas { max-height: 64px; width: auto; display: block; }
+.fit-name { font-size: 10.5px; color: var(--label); text-align: center; line-height: 1.25; }
+.fit-style { font-size: 9.5px; color: var(--label-3); text-align: center; }
+.fit-del {
+  position: absolute; top: 2px; right: 3px; width: 16px; height: 16px; line-height: 15px;
+  border-radius: 50%; background: var(--fill-1); color: var(--label-2);
+  font-size: 12px; text-align: center;
+}
+.fit-del:hover { background: var(--red); color: #fff; }
+
+.fit-h { font-size: 12px; margin: 16px 0 7px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.fit-h .hint { margin: 0; font-weight: 400; }
+
+.fit-sws { display: flex; flex-wrap: wrap; gap: 6px; }
+.fit-sw {
+  position: relative; width: 46px; height: 46px; border-radius: var(--r-in);
+  border: 1.5px solid rgba(0,0,0,.10); cursor: pointer; padding: 0;
+  box-shadow: var(--sh-card); transition: transform var(--dur-fast) var(--ease-bounce);
+}
+.fit-sw span {
+  position: absolute; left: 0; right: 0; bottom: -14px; font-size: 8.5px;
+  color: var(--label-3); text-align: center; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.fit-sws { padding-bottom: 15px; }
+.fit-sw:hover { transform: scale(1.10); }
+.fit-sw.on { box-shadow: 0 0 0 2.5px var(--blue), var(--sh-card); }
+
+.fit-sel {
+  width: 100%; font-family: inherit; font-size: 12.5px; padding: 6px 9px;
+  border-radius: var(--r-ctl); border: 1px solid var(--ctl-border);
+  background: var(--ctl); color: var(--label);
+}
+.fit-import { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--separator); }
+
+.fit-rep { margin-top: 14px; display: grid; gap: 7px; }
+.fit-rep-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.fit-rep-sw { width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgba(0,0,0,.12); flex: 0 0 auto; }
+.fit-rep-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+
+.fit-imp { margin-top: 12px; padding: 12px; border-radius: var(--r-box); background: var(--win-2); }
+.fit-imp-stage { display: grid; place-items: center; margin: 8px 0; }
+.fit-imp-stage canvas { border-radius: var(--r-in); cursor: grab; touch-action: none; max-width: 100%; }
+.fit-imp-stage canvas:active { cursor: grabbing; }
+.fit-imp-form { margin-top: 8px; }
+.fit-imp-form input[type=text], .fit-imp-form select {
+  font-family: inherit; font-size: 12.5px; padding: 5px 8px; width: 100%;
+  border-radius: var(--r-ctl); border: 1px solid var(--ctl-border);
+  background: var(--ctl); color: var(--label);
+}

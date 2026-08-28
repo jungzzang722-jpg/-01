@@ -1,0 +1,13 @@
+{
+  "name": "personal-color-styling",
+  "private": true,
+  "description": "퍼스널 컬러 & 코디 진단 — 가상 피팅 모듈의 브라우저 검증용 개발 의존성만 있습니다. 배포본(퍼스널컬러진단.html)은 의존성이 없습니다.",
+  "scripts": {
+    "build": "python3 build/build.py",
+    "test:engine": "node build/test-tryon.mjs",
+    "test:ui": "node build/test-ui.mjs",
+    "test:all": "node build/test-all.mjs",
+    "test:recolor": "node build/test-recolor-visual.mjs"
+  },
+  "devDependencies": { "playwright": "1.49.1" }
+}
