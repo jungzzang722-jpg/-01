@@ -59,6 +59,28 @@ const r = await page.evaluate(async (fx) => {
     return cv;
   }
 
+  /* 흔한 실패 사진 — 소매를 몸통에 붙여 찍은 티셔츠 (겨드랑이 틈이 없다) */
+  function shirtArmsDown() {
+    const W=600, H=760, cv=document.createElement('canvas');
+    cv.width=W; cv.height=H; const c=cv.getContext('2d');
+    c.fillStyle='#FFFFFF'; c.fillRect(0,0,W,H);
+    const cx=W/2, shY=H*0.12, hemY=H*0.88, shHalf=W*0.30, bodyHalf=W*0.245;
+    c.fillStyle='#8B3A4A';
+    c.beginPath();
+    c.moveTo(cx-W*0.09, shY);
+    c.lineTo(cx-shHalf, shY+H*0.02);
+    c.lineTo(cx-shHalf*0.98, shY+H*0.26);   // 소매가 몸통 옆에 딱 붙어 내려온다
+    c.lineTo(cx-bodyHalf, shY+H*0.27);
+    c.lineTo(cx-bodyHalf*0.98, hemY);
+    c.lineTo(cx+bodyHalf*0.98, hemY);
+    c.lineTo(cx+bodyHalf, shY+H*0.27);
+    c.lineTo(cx+shHalf*0.98, shY+H*0.26);
+    c.lineTo(cx+shHalf, shY+H*0.02);
+    c.lineTo(cx+W*0.09, shY);
+    c.closePath(); c.fill();
+    return cv;
+  }
+
   const out = { steps: [] };
   let item=null;
   try {
@@ -98,6 +120,15 @@ const r = await page.evaluate(async (fx) => {
       out.warns = res.report.warnings;
     }
   } catch (e) { out.composeError = e.message + ' | ' + (e.stack||'').split('\n')[1]; }
+  /* 실패 사진도 터지지 않고 들어와야 한다 */
+  try {
+    const bad = GARMENTS.importPhoto(shirtArmsDown(), { ko:'붙은소매', cat:'top', material:'jersey' });
+    out.badSleeve = bad.sleeve; out.badHem = bad.hem;
+    const res2 = TRYON.compose(prep, [{ garmentId:bad.id, colorHex:'#8B3A4A' }],
+                               { ease:1, lightAmount:0.75, eraseOriginal:true });
+    out.badPx = res2.report.layers[0].pixels;
+  } catch (e) { out.badError = e.message; }
+
   return out;
 }, fixture);
 
@@ -109,5 +140,7 @@ if (r.pantsAnchors) console.log('  대응점:', r.pantsAnchors.join(', '));
 console.log('합성 :', r.composeError ? 'FAIL — '+r.composeError : JSON.stringify(r.compose));
 (r.warns||[]).forEach(w=>console.log('  ⚠', w.slice(0,80)));
 if (r.png) fs.writeFileSync(`${OUT}/import.png`, Buffer.from(r.png.split(',')[1],'base64'));
+console.log('소매 붙은 사진:', r.badError ? 'FAIL — '+r.badError
+  : 'sleeve=' + r.badSleeve + ' hem=' + r.badHem + ' px=' + r.badPx);
 console.log('errors:', errs.length?errs.join('\n'):'none');
 await browser.close();
