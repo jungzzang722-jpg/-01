@@ -396,7 +396,35 @@
       if (trun >= 0 && w - trun > tBest) { tBest = w - trun; tx0 = trun; tx1 = w - 1; }
       // 옷 구간이 몸통 구간의 40%도 안 되면 옷을 못 찾은 것이다
       if (!(tBest >= (bestRun || 1) * 0.40)) { tx0 = -1; tx1 = -1; }
-      rows.push({ x0: a, x1: b, cx0: bx0, cx1: bx1, tx0: tx0, tx1: tx1 });
+      /* ── 옷이 **둘로 갈라지는 곳** ────────────────────────────────
+       * 가랑이 아래에서 바지는 두 가랑이로 나뉜다. 그때 "가장 긴 옷 구간"은
+       * 바짓가랑이 **한 짝**이고, 그 중심은 몸의 중심이 아니다. 그 값으로
+       * 가랑이 대응점을 잡으니 바지가 통째로 옆으로 밀렸다 — 실제 사진에서
+       * 한쪽 다리가 맨살로 남은 원인이 이것이다.
+       * 그래서 서로 비슷한 굵기의 옷 구간들은 하나로 묶어 **가운데를
+       * 되찾는다.** 몸통 옆에 붙은 소매는 훨씬 가늘어 묶이지 않는다. */
+      function union(clothed, best) {
+        var lo = -1, hi = -1, st = -1;
+        for (var x3 = 0; x3 <= w; x3++) {
+          var q3 = y2 * w + x3;
+          var on = x3 < w && mask[q3] && (!clothed || !skin[q3]);
+          if (on) { if (st < 0) st = x3; }
+          else if (st >= 0) {
+            // 가장 굵은 구간의 1/4은 되어야 같은 부위로 본다.
+            // 두 바짓가랑이·두 다리는 비슷하고, 몸통 옆의 팔은 훨씬 가늘다.
+            if (x3 - st >= best * 0.25) {
+              if (lo < 0 || st < lo) lo = st;
+              if (x3 - 1 > hi) hi = x3 - 1;
+            }
+            st = -1;
+          }
+        }
+        return [lo, hi];
+      }
+      var u = tx0 >= 0 ? union(true, tBest) : [-1, -1];
+      var m = union(false, bestRun);
+      rows.push({ x0: a, x1: b, cx0: bx0, cx1: bx1, tx0: tx0, tx1: tx1,
+                  ux0: u[0], ux1: u[1], mx0: m[0], mx1: m[1] });
     }
 
     /* ── 랜드마크 ──
@@ -469,9 +497,15 @@
     for (var k = -win; k <= win; k++) {
       var rr = body.rows[clamp(r + k, 0, h - 1)];
       /* 몸통을 물으면 **옷 구간**을 먼저 준다(rows 주석 참고).
-       * 팔이 몸통에 붙어 보여도 몸통 폭이 팔만큼 부풀지 않는다. */
-      var x0 = core ? (rr.tx0 >= 0 ? rr.tx0 : rr.cx0) : rr.x0;
-      var x1 = core ? (rr.tx0 >= 0 ? rr.tx1 : rr.cx1) : rr.x1;
+       * 팔이 몸통에 붙어 보여도 몸통 폭이 팔만큼 부풀지 않는다.
+       * 갈라진 바짓가랑이는 묶어서(ux) 가운데가 한쪽으로 쏠리지 않게 한다. */
+      /* 옷이 없는 높이(반바지 아래 맨다리)에서는 옷 구간이 비어 있다.
+       * 그때 "가장 긴 전경 구간"으로 되돌리면 **다리 한 짝**만 잡혀,
+       * 밑단 대응점이 한쪽으로 무너진다 — 실측에서 오른쪽 밑단이 몸의
+       * 중심축보다 왼쪽(241 < 279)에 찍혔고, 그래서 한 다리가 통째로
+       * 맨살로 남았다. 비슷한 굵기의 전경 구간들을 묶어서 받는다. */
+      var x0 = core ? (rr.tx0 >= 0 ? rr.ux0 : (rr.mx0 >= 0 ? rr.mx0 : rr.cx0)) : rr.x0;
+      var x1 = core ? (rr.tx0 >= 0 ? rr.ux1 : (rr.mx0 >= 0 ? rr.mx1 : rr.cx1)) : rr.x1;
       if (x0 >= 0) { a.push(x0); b.push(x1); }
     }
     if (!a.length) {
@@ -861,7 +895,9 @@
         var crotchY = clamp((L.crotchY > 0 ? L.crotchY : hY + (L.bottom - hY) * 0.11) + shift,
                             0, body.h - 1);
         var crSpan = spanAt(body, crotchY, true);
-        res.crotchC = [crSpan.cx, crotchY];
+        /* 가랑이의 x는 몸의 **중심축**이다. 그 행의 옷 구간 중심으로 잡으면
+         * 갈라지기 시작한 순간 한쪽으로 쏠린다. */
+        res.crotchC = [centerAxis(body, L), crotchY];
         var hemEdges = legEdges(body, hemY, crSpan.cx, hemHalf);
         res.hemLin = [hemEdges.Lin, hemY];
         res.hemRin = [hemEdges.Rin, hemY];
