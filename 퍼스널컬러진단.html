@@ -6929,6 +6929,57 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     return item;
   }
 
+  /**
+   * 손으로 옮긴 대응점에서 옷본 수치를 다시 뽑는다.
+   *
+   * 없으면 반입 화면의 "점을 끌어서 고치세요"가 **거짓말이 된다.**
+   * 대응점만 고쳐 봐야 옷의 크기는 geom(어깨 폭·몸통 폭·겨드랑이 높이…)이
+   * 정하는데 그쪽이 그대로면 화면은 꿈쩍도 하지 않는다 — 사용자가
+   * "수동으로 맞춰도 크기가 안 맞는다"고 한 것이 이것이다.
+   */
+  function geomFromAnchors(A, cat, prev) {
+    if (!A) return prev || null;
+    function mid(l, r, i) { return (A[l] && A[r]) ? (A[l][i] + A[r][i]) / 2 : null; }
+    function half(l, r) { return (A[l] && A[r]) ? (A[r][0] - A[l][0]) / 2 : null; }
+    function pick(v, d) { return (v == null || !isFinite(v)) ? d : v; }
+    var p = prev || {};
+    if (cat === 'bottom') {
+      return {
+        cx: pick(mid('waistL', 'waistR', 0), p.cx),
+        waistY: pick(mid('waistL', 'waistR', 1), p.waistY),
+        waistHalf: pick(half('waistL', 'waistR'), p.waistHalf),
+        hipY: pick(mid('hipL', 'hipR', 1), p.hipY),
+        hipHalf: pick(half('hipL', 'hipR'), p.hipHalf),
+        hemY: pick(mid('hemL', 'hemR', 1), p.hemY),
+        crotchY: pick(A.crotchC ? A.crotchC[1] : null, p.crotchY),
+        isSkirt: p.isSkirt
+      };
+    }
+    return {
+      cx: pick(mid('shL', 'shR', 0), p.cx),
+      shY: pick(mid('shL', 'shR', 1), p.shY),
+      shHalf: pick(half('shL', 'shR'), p.shHalf),
+      neckY: pick(mid('neckL', 'neckR', 1), p.neckY),
+      armpitY: pick(mid('pitL', 'pitR', 1), p.armpitY),
+      bodyHalf: pick(half('chestL', 'chestR'), p.bodyHalf),
+      waistHalf: pick(half('waistL', 'waistR'), p.waistHalf),
+      hemY: pick(mid('hemL', 'hemR', 1), p.hemY),
+      hemHalf: pick(half('hemL', 'hemR'), p.hemHalf),
+      cuffY: pick(mid('armL', 'armR', 1), p.cuffY),
+      cuffOut: pick(half('armL', 'armR'), p.cuffOut),
+      sleeve: p.sleeve, neck: p.neck
+    };
+  }
+
+  /** 반입 화면에서 부위를 바꿨을 때 옷본 수치를 다시 잰다 */
+  function remeasure(mask, w, h, cat) {
+    var P = cat === 'bottom' ? measureBottom(mask, w, h) : measureTop(mask, w, h);
+    if (!P) return null;
+    var built = cat === 'bottom' ? bottomAnchorsOf(P) : topAnchorsOf(P);
+    return { anchors: built.anchors, geom: built.geom, sleeve: P.sleeve || null, hem: P.hem || null,
+             shape: P.isSkirt ? 'skirt' : (cat === 'bottom' ? 'pants' : null) };
+  }
+
   function registerUser(items) {
     items.forEach(function (it) { _userById[it.id] = it; });
   }
@@ -6960,6 +7011,7 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     render: renderGarment, cutout: cutout,
     measureTop: measureTop, measureBottom: measureBottom,
     topAnchorsOf: topAnchorsOf, bottomAnchorsOf: bottomAnchorsOf,
+    geomFromAnchors: geomFromAnchors, remeasure: remeasure,
     thumb: thumb,
     importPhoto: importPhoto, saveUser: saveUser, listUser: listUser,
     removeUser: removeUser, registerUser: registerUser, userItems: userItems
@@ -9158,7 +9210,18 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     /* --- 넘침 허용 : 오버사이즈 옷은 원래 실루엣 밖으로 나가야 한다 ---
      * 반경별로 캐시한다. 슬라이더를 잡고 있는 동안 같은 마스크를 매번 다시
      * 만들면 그 비용이 합성 시간의 상당 부분을 차지한다. */
-    var over = Math.round(Math.min(w, h) * 0.012 * ((spec.fit || 1) > 1.15 ? 2.6 : 1.0));
+    /* 옷이 사람 실루엣 밖으로 나갈 수 있는 여유.
+     *
+     * 이 값이 짧은 변의 1.2%(450px 사진에서 **5픽셀**)로 고정돼 있었다.
+     * 그런데 body.mask 는 맨몸이 아니라 **그때 입고 있던 옷까지 포함한**
+     * 실루엣이다. 그러니 원래 옷보다 조금이라도 넉넉한 옷은 전부 그 윤곽에
+     * 눌려 들어갔다 — 오버핏이 오버핏으로 안 보이고, 여유분 슬라이더를
+     * 끝까지 올려도 폭이 안 늘고, 반입한 옷의 어깨를 밖으로 끌어도
+     * 아무 일도 일어나지 않았다.
+     *
+     * 넉넉한 정도(옷의 재단 × 사용자가 고른 여유분)만큼 열어 준다. */
+    var roomy = (spec.fit || 1) * (gopts.ease == null ? 1 : gopts.ease);
+    var over = Math.round(Math.min(w, h) * 0.012 * clamp(1 + (roomy - 1) * 6, 1, 4.5));
     if (!body._allow) body._allow = {};
     var allow = body._allow[over] || (body._allow[over] = dilate(body.mask, w, h, over));
     /* 소매는 넘침을 허용하지 않는다.
@@ -12904,7 +12967,7 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
 
           '<div class="fit-sliders">' +
             '<label class="fit-sl"><span>여유분</span>' +
-              '<input type="range" id="fitEase" min="88" max="128" value="100">' +
+              '<input type="range" id="fitEase" min="70" max="150" value="100">' +
               '<b id="fitEaseV">보통</b></label>' +
             '<label class="fit-sl"><span>기장</span>' +
               '<input type="range" id="fitLen" min="-60" max="60" value="0">' +
@@ -13560,8 +13623,9 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
         '<div class="fit-imp">' +
           '<h4 class="fit-h">배경을 지웠습니다 — 점 위치를 확인해 주세요</h4>' +
           '<div class="fit-imp-stage"><canvas id="impCv"></canvas></div>' +
-          '<p class="hint">파란 점은 <b>어깨 · 소매끝 · 허리 · 밑단</b>입니다. ' +
-          '이 점이 몸의 같은 위치로 이동합니다. 어긋나 있으면 끌어서 고치세요.</p>' +
+          '<p class="hint">파란 점이 몸의 같은 자리로 갑니다 — ' +
+          '<b>목 · 어깨 · 겨드랑이 · 가슴 · 허리 · 밑단</b>, 그리고 <b>소매끝</b>. ' +
+          '어긋나 있으면 끌어서 고치세요. 옷 크기가 바로 따라 바뀝니다.</p>' +
           '<div class="form fit-imp-form">' +
             '<div class="field"><label for="impKo">이름</label><div class="fc">' +
               '<input type="text" id="impKo" value="내 옷" maxlength="24"></div></div>' +
@@ -13591,8 +13655,19 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     });
   }
 
+  /* 끌 수 있는 점.
+   * 예전에는 몸통 점만 내주면서 안내문에는 "소매끝"이라고 적어 두었다.
+   * 소매가 안 맞아도 고칠 방법이 없었다는 뜻이다. */
   function impKeys() {
-    return IMP.item.cat === 'bottom' ? TRYON.KEYS_BOTTOM : TRYON.KEYS_TOP;
+    if (IMP.item.cat === 'bottom') return TRYON.KEYS_BOTTOM;
+    return TRYON.KEYS_TOP.concat(['armL', 'armR', 'cuffInL', 'cuffInR']);
+  }
+
+  /** 점을 옮겼으면 옷본 수치도 다시 뽑아야 화면이 따라 움직인다 */
+  function syncImportGeom() {
+    var it = IMP.item;
+    it.geom = GARMENTS.geomFromAnchors(it.anchors, it.cat, it.geom);
+    GARMENTS.invalidate(it.id);
   }
 
   function drawImport() {
@@ -13641,15 +13716,27 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       IMP.item.anchors[IMP.drag] = [clamp(p[0], 0, IMP.item.w), clamp(p[1], 0, IMP.item.h)];
       drawImport(); e.preventDefault();
     }
-    function up() { IMP.drag = null; }
+    function up() {
+      if (IMP && IMP.drag) { syncImportGeom(); drawImport(); }
+      if (IMP) IMP.drag = null;
+    }
     cv.addEventListener('mousedown', down); cv.addEventListener('touchstart', down, { passive: false });
     global.addEventListener('mousemove', move); cv.addEventListener('touchmove', move, { passive: false });
     global.addEventListener('mouseup', up); cv.addEventListener('touchend', up);
 
     panel.querySelector('#impCat').addEventListener('change', function () {
-      IMP.item.cat = this.value;
-      IMP.item.anchors = GARMENTS.estimateAnchors(rebuildMask(IMP.item), IMP.item.w, IMP.item.h, this.value)
-        || IMP.item.anchors;
+      var it = IMP.item;
+      it.cat = this.value;
+      /* 부위가 바뀌면 재는 방법 자체가 달라진다(상의는 겨드랑이·소매, 하의는
+       * 가랑이·다리). 그래서 대응점만이 아니라 옷본 수치까지 다시 잰다.
+       * — 여기서 예전 API(estimateAnchors)를 부르고 있어 부위를 바꾸면
+       *   그대로 터졌다. */
+      var m = GARMENTS.remeasure(rebuildMask(it), it.w, it.h, it.cat);
+      if (m) {
+        it.anchors = m.anchors; it.geom = m.geom;
+        it.sleeve = m.sleeve; it.hem = m.hem; it.shape = m.shape;
+      }
+      GARMENTS.invalidate(it.id);
       drawImport();
     });
     panel.querySelector('#impCancel').onclick = function () { panel.innerHTML = ''; IMP = null; };

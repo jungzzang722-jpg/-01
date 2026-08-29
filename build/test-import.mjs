@@ -152,6 +152,51 @@ const r = await page.evaluate(async (fx) => {
       out.warns = res.report.warnings;
     }
   } catch (e) { out.composeError = e.message + ' | ' + (e.stack||'').split('\n')[1]; }
+  /* ── 손으로 고친 것이 실제로 반영되는가 ──────────────────────────
+   * 반입 화면은 "점을 끌어서 고치세요"라고 안내한다. 그 약속이 지켜지는지는
+   * 눈이 아니라 숫자로 확인해야 한다. 대응점만 고치고 옷본 수치(geom)를
+   * 그대로 두면 화면은 꿈쩍도 하지 않는다. */
+  try {
+    const src = GARMENTS.get(item.id);
+    const base = TRYON.compose(prep, [{ garmentId:item.id, colorHex:'#8B3A4A' }],
+                               { ease:1, lightAmount:0.75, eraseOriginal:true });
+    const px0 = base.report.layers[0].pixels;
+    const A0 = TRYON.bodyAnchors(prep, GARMENTS.byId(item.id), { ease:1 });
+    const shHalf0 = A0 ? Math.round((A0.shR[0]-A0.shL[0])/2) : null;
+
+    /* 어깨만 25% 넓힌다.
+     * 전부 넓히면 아무 일도 안 일어난다 — 크기는 옷본 폭의 **중앙값 대비**로
+     * 정규화되므로 통째로 키우면 그대로 약분된다. 끌어서 바뀌는 것은
+     * 크기가 아니라 **비율**이다. */
+    const cx = (item.anchors.shL[0] + item.anchors.shR[0]) / 2;
+    ['L','R'].forEach(sd=>{
+      const a = item.anchors['sh'+sd];
+      a[0] = cx + (a[0] - cx) * 0.72;   // 자동 측정이 어깨를 놓쳤을 때를 흉내낸다
+    });
+    item.geom = GARMENTS.geomFromAnchors(item.anchors, item.cat, item.geom);
+    GARMENTS.invalidate(item.id);
+    /* 끌어서 고친 값이 **몸에 붙는 좌표까지** 내려가는지 본다.
+     * 합성 픽셀 수로 재려 했더니 드러난 자리를 주변 색으로 메우는 단계가
+     * 그 차이를 덮어 버려 보이지 않았다. 확인해야 할 것은 그 연쇄다:
+     *   끌어놓은 점 → 옷본 수치(geom) → 몸 대응점 */
+    const G2 = GARMENTS.get(item.id);
+    out.probe = { itemGeom: item.geom && Math.round(item.geom.shHalf),
+                  renderGeom: G2 && G2.geom && Math.round(G2.geom.shHalf),
+                  bodyBefore: shHalf0 };
+    const A3 = TRYON.bodyAnchors(prep, GARMENTS.byId(item.id), { ease:1 });
+    out.probe.bodyAfter = A3 ? Math.round((A3.shR[0]-A3.shL[0])/2) : null;
+    const wide = TRYON.compose(prep, [{ garmentId:item.id, colorHex:'#8B3A4A' }],
+                               { ease:1, lightAmount:0.75, eraseOriginal:true });
+    out.manual = { before: px0, after: wide.report.layers[0].pixels };
+
+    // 여유분 슬라이더도 폭을 실제로 바꾸는가
+    const tight = TRYON.compose(prep, [{ garmentId:item.id, colorHex:'#8B3A4A' }],
+                                { ease:0.70, lightAmount:0.75, eraseOriginal:true });
+    const loose = TRYON.compose(prep, [{ garmentId:item.id, colorHex:'#8B3A4A' }],
+                                { ease:1.50, lightAmount:0.75, eraseOriginal:true });
+    out.ease = { tight: tight.report.layers[0].pixels, loose: loose.report.layers[0].pixels };
+  } catch (e) { out.manualError = e.message; }
+
   /* 후드가 어깨 위로 올라온 사진에서도 어깨 폭을 제대로 재야 한다 */
   try {
     const hd = GARMENTS.importPhoto(hoodiePhoto(), { ko:'후디', cat:'top', material:'cotton' });
@@ -186,6 +231,16 @@ if (r.pantsAnchors) console.log('  대응점:', r.pantsAnchors.join(', '));
 console.log('합성 :', r.composeError ? 'FAIL — '+r.composeError : JSON.stringify(r.compose));
 (r.warns||[]).forEach(w=>console.log('  ⚠', w.slice(0,80)));
 if (r.png) fs.writeFileSync(`${OUT}/import.png`, Buffer.from(r.png.split(',')[1],'base64'));
+if (r.probe) console.log('  probe:', JSON.stringify(r.probe));
+if (r.manualError) console.log('수동 조정: FAIL —', r.manualError);
+else {
+  const q = r.probe;
+  console.log('수동 조정: 어깨점 28% 안으로 →',
+    '옷본', q.itemGeom, '· 렌더', q.renderGeom, '· 몸 대응점', q.bodyBefore, '→', q.bodyAfter,
+    (q.bodyAfter != null && q.bodyBefore != null && q.bodyAfter < q.bodyBefore * 0.95 ? '✓' : '✗ 반영 안 됨'));
+  console.log('여유분   : 0.70 →', r.ease.tight, '· 1.50 →', r.ease.loose,
+    (r.ease.loose > r.ease.tight * 1.15 ? '✓' : '✗ 폭이 안 바뀜'));
+}
 console.log('후드 사진:', r.hoodError ? 'FAIL — '+r.hoodError
   : JSON.stringify(r.hood) + ' px=' + r.hoodPx);
 console.log('소매 붙은 사진:', r.badError ? 'FAIL — '+r.badError

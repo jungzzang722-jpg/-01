@@ -1297,6 +1297,57 @@
     return item;
   }
 
+  /**
+   * 손으로 옮긴 대응점에서 옷본 수치를 다시 뽑는다.
+   *
+   * 없으면 반입 화면의 "점을 끌어서 고치세요"가 **거짓말이 된다.**
+   * 대응점만 고쳐 봐야 옷의 크기는 geom(어깨 폭·몸통 폭·겨드랑이 높이…)이
+   * 정하는데 그쪽이 그대로면 화면은 꿈쩍도 하지 않는다 — 사용자가
+   * "수동으로 맞춰도 크기가 안 맞는다"고 한 것이 이것이다.
+   */
+  function geomFromAnchors(A, cat, prev) {
+    if (!A) return prev || null;
+    function mid(l, r, i) { return (A[l] && A[r]) ? (A[l][i] + A[r][i]) / 2 : null; }
+    function half(l, r) { return (A[l] && A[r]) ? (A[r][0] - A[l][0]) / 2 : null; }
+    function pick(v, d) { return (v == null || !isFinite(v)) ? d : v; }
+    var p = prev || {};
+    if (cat === 'bottom') {
+      return {
+        cx: pick(mid('waistL', 'waistR', 0), p.cx),
+        waistY: pick(mid('waistL', 'waistR', 1), p.waistY),
+        waistHalf: pick(half('waistL', 'waistR'), p.waistHalf),
+        hipY: pick(mid('hipL', 'hipR', 1), p.hipY),
+        hipHalf: pick(half('hipL', 'hipR'), p.hipHalf),
+        hemY: pick(mid('hemL', 'hemR', 1), p.hemY),
+        crotchY: pick(A.crotchC ? A.crotchC[1] : null, p.crotchY),
+        isSkirt: p.isSkirt
+      };
+    }
+    return {
+      cx: pick(mid('shL', 'shR', 0), p.cx),
+      shY: pick(mid('shL', 'shR', 1), p.shY),
+      shHalf: pick(half('shL', 'shR'), p.shHalf),
+      neckY: pick(mid('neckL', 'neckR', 1), p.neckY),
+      armpitY: pick(mid('pitL', 'pitR', 1), p.armpitY),
+      bodyHalf: pick(half('chestL', 'chestR'), p.bodyHalf),
+      waistHalf: pick(half('waistL', 'waistR'), p.waistHalf),
+      hemY: pick(mid('hemL', 'hemR', 1), p.hemY),
+      hemHalf: pick(half('hemL', 'hemR'), p.hemHalf),
+      cuffY: pick(mid('armL', 'armR', 1), p.cuffY),
+      cuffOut: pick(half('armL', 'armR'), p.cuffOut),
+      sleeve: p.sleeve, neck: p.neck
+    };
+  }
+
+  /** 반입 화면에서 부위를 바꿨을 때 옷본 수치를 다시 잰다 */
+  function remeasure(mask, w, h, cat) {
+    var P = cat === 'bottom' ? measureBottom(mask, w, h) : measureTop(mask, w, h);
+    if (!P) return null;
+    var built = cat === 'bottom' ? bottomAnchorsOf(P) : topAnchorsOf(P);
+    return { anchors: built.anchors, geom: built.geom, sleeve: P.sleeve || null, hem: P.hem || null,
+             shape: P.isSkirt ? 'skirt' : (cat === 'bottom' ? 'pants' : null) };
+  }
+
   function registerUser(items) {
     items.forEach(function (it) { _userById[it.id] = it; });
   }
@@ -1328,6 +1379,7 @@
     render: renderGarment, cutout: cutout,
     measureTop: measureTop, measureBottom: measureBottom,
     topAnchorsOf: topAnchorsOf, bottomAnchorsOf: bottomAnchorsOf,
+    geomFromAnchors: geomFromAnchors, remeasure: remeasure,
     thumb: thumb,
     importPhoto: importPhoto, saveUser: saveUser, listUser: listUser,
     removeUser: removeUser, registerUser: registerUser, userItems: userItems
