@@ -25,14 +25,14 @@ const r = await page.evaluate(async (fx) => {
     c.beginPath();
     c.moveTo(cx-W*0.09, shY);
     c.lineTo(cx-shHalf, shY+H*0.02);
-    c.lineTo(cx-cuffOut, cuffY-H*0.06);
+    c.lineTo(cx-cuffOut, cuffY-H*0.05);
     c.lineTo(cx-cuffOut*0.92, cuffY);
-    c.lineTo(cx-bodyHalf, shY+H*0.22);
+    c.lineTo(cx-bodyHalf, shY+H*0.18);
     c.lineTo(cx-bodyHalf*0.98, hemY);
     c.lineTo(cx+bodyHalf*0.98, hemY);
-    c.lineTo(cx+bodyHalf, shY+H*0.22);
+    c.lineTo(cx+bodyHalf, shY+H*0.18);
     c.lineTo(cx+cuffOut*0.92, cuffY);
-    c.lineTo(cx+cuffOut, cuffY-H*0.06);
+    c.lineTo(cx+cuffOut, cuffY-H*0.05);
     c.lineTo(cx+shHalf, shY+H*0.02);
     c.lineTo(cx+W*0.09, shY);
     c.closePath(); c.fill();
@@ -81,6 +81,35 @@ const r = await page.evaluate(async (fx) => {
     return cv;
   }
 
+  /* 후드가 어깨선 위로 펼쳐진 사진 — 실제 상품컷에서 가장 흔한 모양 */
+  function hoodiePhoto() {
+    const W=620, H=780, cv=document.createElement('canvas');
+    cv.width=W; cv.height=H; const c=cv.getContext('2d');
+    c.fillStyle='#FFFFFF'; c.fillRect(0,0,W,H);
+    const cx=W/2, shY=H*0.22, hemY=H*0.92;
+    const shHalf=W*0.31, bodyHalf=W*0.28, cuffOut=W*0.44, cuffY=H*0.86;
+    c.fillStyle='#9A9A9E';
+    // 후드 — 어깨선 위로 크게 펼쳐진다
+    c.beginPath(); c.ellipse(cx, shY-H*0.04, W*0.155, H*0.085, 0, Math.PI, 0); c.fill();
+    c.fillRect(cx-W*0.155, shY-H*0.05, W*0.31, H*0.06);
+    // 몸통 + 소매
+    c.beginPath();
+    c.moveTo(cx-W*0.12, shY);
+    c.lineTo(cx-shHalf, shY+H*0.02);
+    c.lineTo(cx-cuffOut, cuffY-H*0.05);
+    c.lineTo(cx-cuffOut*0.90, cuffY);
+    c.lineTo(cx-bodyHalf, shY+H*0.20);
+    c.lineTo(cx-bodyHalf*0.99, hemY);
+    c.lineTo(cx+bodyHalf*0.99, hemY);
+    c.lineTo(cx+bodyHalf, shY+H*0.20);
+    c.lineTo(cx+cuffOut*0.90, cuffY);
+    c.lineTo(cx+cuffOut, cuffY-H*0.05);
+    c.lineTo(cx+shHalf, shY+H*0.02);
+    c.lineTo(cx+W*0.12, shY);
+    c.closePath(); c.fill();
+    return cv;
+  }
+
   const out = { steps: [] };
   let item=null;
   try {
@@ -88,6 +117,8 @@ const r = await page.evaluate(async (fx) => {
     out.steps.push('importPhoto ok');
     out.anchorKeys = Object.keys(item.anchors);
     out.size = [item.w, item.h];
+    out.topSpec = { sleeve: item.sleeve, hem: item.hem,
+      shHalf: Math.round((item.anchors.shR[0]-item.anchors.shL[0])/2) };
   } catch (e) { out.importError = e.message; return out; }
 
   const img = person();
@@ -105,6 +136,7 @@ const r = await page.evaluate(async (fx) => {
     pants = GARMENTS.importPhoto(pantsPhoto(), { ko:'생성 바지', cat:'bottom', material:'denim' });
     out.steps.push('pants ok');
     out.pantsAnchors = Object.keys(pants.anchors);
+    out.pantsSpec = { hem: pants.hem, shape: pants.shape };
   } catch (e) { out.pantsError = e.message; }
 
   try {
@@ -120,6 +152,19 @@ const r = await page.evaluate(async (fx) => {
       out.warns = res.report.warnings;
     }
   } catch (e) { out.composeError = e.message + ' | ' + (e.stack||'').split('\n')[1]; }
+  /* 후드가 어깨 위로 올라온 사진에서도 어깨 폭을 제대로 재야 한다 */
+  try {
+    const hd = GARMENTS.importPhoto(hoodiePhoto(), { ko:'후디', cat:'top', material:'cotton' });
+    const A2 = hd.anchors;
+    out.hood = { sleeve: hd.sleeve, hem: hd.hem,
+      shHalf: Math.round((A2.shR[0]-A2.shL[0])/2),
+      bodyHalf: Math.round((A2.chestR[0]-A2.chestL[0])/2),
+      shY: Math.round(A2.shL[1]), h: hd.h };
+    const res3 = TRYON.compose(prep, [{ garmentId:hd.id, colorHex:'#9A9A9E' }],
+                               { ease:1, lightAmount:0.75, eraseOriginal:true });
+    out.hoodPx = res3.report.layers[0].pixels;
+  } catch (e) { out.hoodError = e.message; }
+
   /* 실패 사진도 터지지 않고 들어와야 한다 */
   try {
     const bad = GARMENTS.importPhoto(shirtArmsDown(), { ko:'붙은소매', cat:'top', material:'jersey' });
@@ -133,13 +178,16 @@ const r = await page.evaluate(async (fx) => {
 }, fixture);
 
 console.log('반입 :', r.importError ? 'FAIL — '+r.importError : 'ok ' + JSON.stringify(r.size));
+if (r.topSpec) console.log('  판정 :', JSON.stringify(r.topSpec));
 if (r.anchorKeys) console.log('대응점:', r.anchorKeys.join(', '));
 console.log('몸 대응점:', r.bodyAnchorsError ? 'FAIL — '+r.bodyAnchorsError : r.bodyAnchors);
-console.log('바지 :', r.pantsError ? 'FAIL — '+r.pantsError : 'ok');
+console.log('바지 :', r.pantsError ? 'FAIL — '+r.pantsError : 'ok ' + JSON.stringify(r.pantsSpec));
 if (r.pantsAnchors) console.log('  대응점:', r.pantsAnchors.join(', '));
 console.log('합성 :', r.composeError ? 'FAIL — '+r.composeError : JSON.stringify(r.compose));
 (r.warns||[]).forEach(w=>console.log('  ⚠', w.slice(0,80)));
 if (r.png) fs.writeFileSync(`${OUT}/import.png`, Buffer.from(r.png.split(',')[1],'base64'));
+console.log('후드 사진:', r.hoodError ? 'FAIL — '+r.hoodError
+  : JSON.stringify(r.hood) + ' px=' + r.hoodPx);
 console.log('소매 붙은 사진:', r.badError ? 'FAIL — '+r.badError
   : 'sleeve=' + r.badSleeve + ' hem=' + r.badHem + ' px=' + r.badPx);
 console.log('errors:', errs.length?errs.join('\n'):'none');

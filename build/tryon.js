@@ -1297,6 +1297,21 @@
      *  소매가 몸통 천까지 가져간다.) */
     var clampHalf = (gm.bodyHalf || 0) * 0.88;
 
+    /* 겨드랑이 **위쪽**에도 울타리가 필요하다.
+     * 지금까지 요크(어깨~목선)는 옷본 어디든 읽을 수 있었다. 그런데 몸에서
+     * 어깨점 바로 아래 바깥선은 아직 몸통이고, 옷본에서 같은 자리는 이미
+     * 소매다. 그래서 요크가 소매와 진동(armhole) 솔기를 읽어 어깨를 가로지르는
+     * 사선 얼룩이 생겼다 — 아우터 열 벌이 전부 그랬다.
+     * 진동 솔기는 어깨점에서 겨드랑이로 내려오는 선이고, 그 안쪽이 몸통이다.
+     * 대응점 두 개(shL·pitL)가 그 선을 이미 알려 준다. */
+    var gShA = G.anchors.shL, gPitA = G.anchors.pitL;
+    var yokeHalfAt = (gShA && gPitA && pitY > gShA[1])
+      ? function (gy) {
+          var t = Math.max(0, Math.min(1, (gy - gShA[1]) / (pitY - gShA[1])));
+          return (cx - (gShA[0] + (gPitA[0] - gShA[0]) * t)) * 0.985;
+        }
+      : null;
+
     /* 소매를 **먼저** 칠한다. 소매는 팔을 정확히 맞히는 것이 목적이라
      * 옷본의 소매 영역에 제대로 떨어진 픽셀만 그린다(엄격).
      * 그 다음 몸통이 남은 자리를 메운다(관대). 순서가 반대면 몸통이
@@ -1312,9 +1327,13 @@
     parts.push({
       name: 'torso', dst: pt.dst, src: pt.src,
       clampFn: function (uv) {
-        if (uv[1] < pitY) return;
-        if (uv[0] < cx - clampHalf) uv[0] = cx - clampHalf;
-        else if (uv[0] > cx + clampHalf) uv[0] = cx + clampHalf;
+        var lim = clampHalf;
+        if (uv[1] < pitY) {
+          if (!yokeHalfAt) return;
+          lim = yokeHalfAt(uv[1]);
+        }
+        if (uv[0] < cx - lim) uv[0] = cx - lim;
+        else if (uv[0] > cx + lim) uv[0] = cx + lim;
       },
       /* 몸통은 옷본 좌표를 잘라서 읽으므로(구멍 방지) 무엇이든 칠할 수 있다.
        * 그래서 **몸 쪽에서도** 울타리를 쳐야 한다. 없으면 팔뚝처럼 몸통

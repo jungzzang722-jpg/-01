@@ -117,14 +117,24 @@
     ctx.closePath();
   }
 
+  /* drop  : 목선의 좌우 끝이 어깨선보다 얼마나 내려오는가
+   * vdrop : 목선의 **한가운데**가 거기서 또 얼마나 내려오는가
+   *
+   * 둘을 나눈 이유가 있다. 아우터의 앞여밈을 'deepv'로 그렸더니 drop 이 커서
+   * 목선의 좌우 끝이 어깨점까지 올라붙었고, 그러자 어깨를 덮는 요크가 사라져
+   * **비스듬한 끈 두 개**만 남았다. TPS 가 그 끈을 몸의 넓은 어깨에 늘이니
+   * 사선 얼룩이 됐다 — 아우터 열 벌이 전부 그랬다.
+   * 재킷은 어깨를 온전히 덮고 **가슴에서부터** 벌어진다. 그러니 목선의 끝은
+   * 어깨 가까이 두고(drop 작게), 가운데만 깊이 내린다(vdrop 크게). */
   var NECK = {
-    crew:  { half: .105, drop: .028, ko: '라운드넥' },
-    v:     { half: .115, drop: .105, ko: '브이넥' },
-    deepv: { half: .130, drop: .155, ko: '깊은 브이넥' },
-    shirt: { half: .120, drop: .045, ko: '셔츠칼라' },
-    turtle:{ half: .098, drop: .002, ko: '터틀넥' },
-    boat:  { half: .175, drop: .022, ko: '보트넥' },
-    square:{ half: .150, drop: .075, ko: '스퀘어넥' }
+    crew:  { half: .105, drop: .028, vdrop: .016, ko: '라운드넥' },
+    v:     { half: .115, drop: .105, vdrop: .052, ko: '브이넥' },
+    deepv: { half: .130, drop: .155, vdrop: .075, ko: '깊은 브이넥' },
+    lapel: { half: .118, drop: .022, vdrop: .225, ko: '라펠' },
+    shirt: { half: .120, drop: .045, vdrop: .020, ko: '셔츠칼라' },
+    turtle:{ half: .098, drop: .002, vdrop: .014, ko: '터틀넥' },
+    boat:  { half: .175, drop: .022, vdrop: .010, ko: '보트넥' },
+    square:{ half: .150, drop: .075, vdrop: .004, ko: '스퀘어넥' }
   };
 
   /* ── 해부학 사다리 ──────────────────────────────────────────────────
@@ -195,9 +205,10 @@
     pts.push([cx + shHalf, shY]);
     pts.push([cx + shHalf * .70, shY + H * .006]);
     pts.push([cx + neckHalf, neckY]);
-    pts.push([cx + neckHalf * .55, neckY + H * (g.neck === 'v' || g.neck === 'deepv' ? .045 : .014)]);
-    pts.push([cx, neckY + H * (g.neck === 'v' ? .052 : g.neck === 'deepv' ? .075 : .016)]);
-    pts.push([cx - neckHalf * .55, neckY + H * (g.neck === 'v' || g.neck === 'deepv' ? .045 : .014)]);
+    var vDrop = nk.vdrop == null ? .016 : nk.vdrop;
+    pts.push([cx + neckHalf * .55, neckY + H * vDrop * .60]);
+    pts.push([cx, neckY + H * vDrop]);
+    pts.push([cx - neckHalf * .55, neckY + H * vDrop * .60]);
 
     var built = topAnchorsOf({
       cx: cx, neckHalf: neckHalf, neckY: neckY, shY: shY, shHalf: shHalf,
@@ -704,19 +715,19 @@
     G({ id: 't-pique-half-zip', ko: '반집업 반팔 니트', cat: 'top', style: 'classic', material: 'knit', baseHex: '#4E6357', neck: 'turtle', sleeve: 'short', hem: 'hip', fit: 1.06, details: ['zip', 'rib'] }),
 
     /* ---------- 아우터 ---------- */
-    G({ id: 'o-blazer', ko: '테일러드 블레이저', cat: 'outer', style: 'office', material: 'wool', baseHex: '#3B4250', neck: 'deepv', sleeve: 'long', hem: 'thigh', fit: 1.12, shoulderHalf: .310, details: ['button', 'pocket', 'cuff'] }),
-    G({ id: 'o-blazer-oversize', ko: '오버사이즈 블레이저', cat: 'outer', style: 'street', material: 'wool', baseHex: '#6B6257', neck: 'deepv', sleeve: 'long', hem: 'thigh', fit: 1.32, shoulderHalf: .345, details: ['button', 'pocket'] }),
+    G({ id: 'o-blazer', ko: '테일러드 블레이저', cat: 'outer', style: 'office', material: 'wool', baseHex: '#3B4250', neck: 'lapel', sleeve: 'long', hem: 'thigh', fit: 1.12, shoulderHalf: .310, details: ['button', 'pocket', 'cuff'] }),
+    G({ id: 'o-blazer-oversize', ko: '오버사이즈 블레이저', cat: 'outer', style: 'street', material: 'wool', baseHex: '#6B6257', neck: 'lapel', sleeve: 'long', hem: 'thigh', fit: 1.32, shoulderHalf: .345, details: ['button', 'pocket'] }),
     G({ id: 'o-trench', ko: '트렌치코트', cat: 'outer', style: 'classic', material: 'cotton', baseHex: '#C4AC86', neck: 'shirt', sleeve: 'long', hem: 'knee', fit: 1.22, details: ['button', 'pocket', 'cuff'] }),
-    G({ id: 'o-cardigan', ko: '루즈 가디건', cat: 'outer', style: 'casual', material: 'knit', baseHex: '#B9AFA0', neck: 'deepv', sleeve: 'long', hem: 'thigh', fit: 1.20, details: ['button', 'rib'] }),
+    G({ id: 'o-cardigan', ko: '루즈 가디건', cat: 'outer', style: 'casual', material: 'knit', baseHex: '#B9AFA0', neck: 'lapel', sleeve: 'long', hem: 'thigh', fit: 1.20, details: ['button', 'rib'] }),
     G({ id: 'o-denim-jk', ko: '데님 재킷', cat: 'outer', style: 'casual', material: 'denim', baseHex: '#4E6E96', neck: 'shirt', sleeve: 'long', hem: 'waist', fit: 1.12, details: ['button', 'pocket', 'cuff'] }),
-    G({ id: 'o-leather-rider', ko: '레더 라이더 재킷', cat: 'outer', style: 'chic', material: 'leather', baseHex: '#26262A', neck: 'deepv', sleeve: 'long', hem: 'waist', fit: 1.06, details: ['zip', 'pocket'] }),
-    G({ id: 'o-coat-wool', ko: '싱글 울코트', cat: 'outer', style: 'classic', material: 'wool', baseHex: '#43403C', neck: 'deepv', sleeve: 'long', hem: 'knee', fit: 1.24, details: ['button', 'pocket'] }),
+    G({ id: 'o-leather-rider', ko: '레더 라이더 재킷', cat: 'outer', style: 'chic', material: 'leather', baseHex: '#26262A', neck: 'lapel', sleeve: 'long', hem: 'waist', fit: 1.06, details: ['zip', 'pocket'] }),
+    G({ id: 'o-coat-wool', ko: '싱글 울코트', cat: 'outer', style: 'classic', material: 'wool', baseHex: '#43403C', neck: 'lapel', sleeve: 'long', hem: 'knee', fit: 1.24, details: ['button', 'pocket'] }),
     G({ id: 'o-tweed-jk', g: 'f', ko: '트위드 재킷', cat: 'outer', style: 'office', material: 'tweed', baseHex: '#C9BCB2', neck: 'crew', sleeve: 'long', hem: 'hip', fit: 1.08, details: ['button', 'pocket'] }),
     G({ id: 'o-windbreak', ko: '윈드브레이커', cat: 'outer', style: 'sporty', material: 'tech', baseHex: '#1F5F52', neck: 'turtle', sleeve: 'long', hem: 'hip', fit: 1.26, details: ['zip', 'pocket', 'rib'] }),
     G({ id: 'o-shirt-jk', ko: '셔츠 재킷', cat: 'outer', style: 'street', material: 'wool', baseHex: '#6E7B6A', neck: 'shirt', sleeve: 'long', hem: 'thigh', fit: 1.24, details: ['button', 'pocket'] }),
     /* 여름 겉옷 — 냉방과 저녁 바람에 걸치는 한 겹. 겨울 아우터만 있으면
      * 여름 코디에 레이어를 하나도 얹을 수 없다. */
-    G({ id: 'o-linen-jk', ko: '린넨 재킷', cat: 'outer', style: 'chic', material: 'linen', baseHex: '#C6BCA6', neck: 'deepv', sleeve: 'long', hem: 'thigh', fit: 1.16, shoulderHalf: .305, details: ['button', 'pocket'] }),
+    G({ id: 'o-linen-jk', ko: '린넨 재킷', cat: 'outer', style: 'chic', material: 'linen', baseHex: '#C6BCA6', neck: 'lapel', sleeve: 'long', hem: 'thigh', fit: 1.16, shoulderHalf: .305, details: ['button', 'pocket'] }),
 
     /* ---------- 하의 ---------- */
     G({ id: 'b-slim-denim', ko: '슬림 데님', cat: 'bottom', shape: 'pants', style: 'casual', material: 'denim', baseHex: '#3E5A7E', hem: 'ankle', fit: .94, legHalf: .098, taper: .80, details: ['pocket'] }),
@@ -937,7 +948,7 @@
     for (var i = 0; i < table.length - 1; i++) if (ratio < table[i][1]) return table[i][0];
     return table[table.length - 1][0];
   }
-  var HEM_RATIO_TOP = [['crop', 1.07], ['waist', 1.40], ['hip', 1.72], ['thigh', 2.15], ['knee', 9]];
+  var HEM_RATIO_TOP = [['crop', 1.02], ['waist', 1.26], ['hip', 1.58], ['thigh', 1.90], ['knee', 9]];
   var HEM_RATIO_BOTTOM = [['thigh', 1.15], ['knee', 1.70], ['midi', 2.25], ['ankle', 9]];
 
   var SLEEVE_RATIO = {
@@ -963,8 +974,51 @@
     cs.sort(function (a, b) { return a - b; });
     var cx = cs[cs.length >> 1];
 
-    /* 어깨 — 맨 위 3% 지점의 폭. 그보다 위는 목선 때문에 좁다. */
-    var shY = top + Math.max(1, Math.round(HH * 0.03));
+    /* ── 어깨 ──────────────────────────────────────────────────────────
+     * 보통은 실루엣 맨 위가 곧 어깨선이다. 그런데 **터틀넥의 목, 후드,
+     * 세워 놓은 셔츠 칼라**는 어깨선 **위로** 올라온다. 그 상태로 맨 위
+     * 3% 지점의 폭을 재면 어깨가 목 폭·후드 폭으로 잡히고, 그 값으로
+     * 재단하면 옷이 통째로 가늘어진다.
+     *
+     * 목·후드가 있는지는 재서 알 수 있다 — 맨 위가 가장 넓은 곳보다
+     * 뚜렷하게 좁으면 그건 어깨가 아니다. 그럴 때만 건너뛴다.
+     * 실제 상품컷은 대개 후드를 펼치고 목을 세워 찍으므로, 사진 쪽을
+     * 다시 만들라고 하는 것보다 여기서 받아들이는 것이 맞다. */
+    var refBand = Math.round(HH * 0.45);
+    var wRef = 0;
+    for (var yr = top; yr <= top + refBand && yr <= bot; yr++) {
+      if (rows[yr].w > wRef) wRef = rows[yr].w;
+    }
+    var wTop = rows[top + Math.max(1, Math.round(HH * 0.015))].w;
+    var shY;
+    if (wRef > 0 && wTop < wRef * 0.45) {
+      /* 목·후드가 있다. 폭이 어깨답게 넓어지는 첫 행까지 내려간 다음,
+       * **어깨 경사가 끝나는 곳**까지 더 내려간다. 첫 행에서 멈추면 아직
+       * 경사 중턱이라 어깨가 실제보다 좁게 나온다(실측 138 → 102).
+       * 어깨선 위에서는 폭이 행마다 급히 넓어지고, 어깨를 지나 소매로
+       * 넘어가면 완만해진다 — 그 꺾이는 곳이 어깨점이다. */
+      var shTop = top + Math.max(1, Math.round(HH * 0.03));
+      for (var ys = top; ys <= top + refBand && ys <= bot; ys++) {
+        if (rows[ys].w >= wRef * 0.55) { shTop = ys; break; }
+      }
+      var span = Math.max(3, Math.round(HH * 0.08));
+      var peak = 0, dd = [];
+      for (var yd = shTop; yd < shTop + span && yd + 1 <= bot; yd++) {
+        var d1 = rows[yd + 1].w - rows[yd].w;
+        dd.push(d1);
+        if (d1 > peak) peak = d1;
+      }
+      shY = shTop;
+      if (peak > 0.4) {
+        for (var k = 0; k < dd.length; k++) {
+          if (dd[k] < peak * 0.35) { shY = shTop + k; break; }
+          shY = shTop + k + 1;
+        }
+      }
+      shY = Math.max(top + 1, Math.min(top + Math.round(HH * 0.30), shY));
+    } else {
+      shY = top + Math.max(1, Math.round(HH * 0.03));
+    }
     var shHalf = rows[shY].w / 2;
     if (!(shHalf > w * 0.04)) return null;
 
@@ -975,25 +1029,43 @@
       if (half > cuffOut) { cuffOut = half; cuffY = y2; }
     }
 
+    var hemYPre = bot - Math.max(1, Math.round(HH * 0.01));
+
     /* 겨드랑이 — 소매와 몸통 사이에 배경이 들어오는 첫 행 */
     var armpitY = -1;
     for (var y3 = shY; y3 <= top + Math.round(HH * 0.90); y3++) {
       if (rows[y3].runs.length >= 2) { armpitY = y3; break; }
     }
     var sleeve;
-    if (armpitY < 0 || armpitY >= cuffY) {
+    if (armpitY < 0) {
       /* 쐐기가 없다 = 민소매이거나 소매가 몸통에 붙게 찍힌 사진.
        * 소매를 따로 변형하지 않고 요크로 다룬다. */
       armpitY = top + Math.round(HH * 0.275);
       sleeve = 'none';
       cuffY = armpitY; cuffOut = shHalf * 0.90;
     } else {
-      var t = (cuffY - top) / HH;
-      sleeve = t < 0.24 ? 'cap' : t < 0.45 ? 'short' : t < 0.72 ? 'threeq' : 'long';
+      /* 쐐기가 있으면 소매는 분명히 있다. 다만 소매를 **수평으로** 펼쳐
+       * 놓으면 가장 바깥 지점이 겨드랑이보다 위에 올 수 있는데, 그때
+       * 소매가 없다고 판정하면 반팔이 민소매가 된다 — 실제로 그랬다.
+       * 길이는 아래에서 소매 자신의 길이로 재므로, 여기서는 대응점 순서만
+       * 지켜지도록 소맷부리를 겨드랑이 아래로 내려 준다. */
+      var cuffYraw = cuffY;
+      /* 소매 길이는 **소매 자신의 길이**로 재야 한다.
+       * 소맷부리의 높이로 재면 안 된다 — 평면으로 펼칠 때 소매를 얼마나
+       * 벌려 놓았는가에 따라 그 높이가 통째로 달라지기 때문이다. 같은
+       * 긴팔이라도 수평으로 벌리면 소맷부리가 가슴 높이에, 아래로 늘어
+       * 뜨리면 밑단 아래에 온다.
+       * 어깨점에서 소맷부리까지의 **직선 거리**는 어떻게 놓든 변하지 않는다.
+       * 몸 기장 대비 비율은 실물 옷에서 이렇다 —
+       * 캡 .17 · 반팔 .31 · 7부 .66 · 긴팔 .89 */
+      var dxS = Math.max(0, cuffOut - shHalf), dyS = Math.max(0, cuffYraw - shY);
+      var lenS = Math.sqrt(dxS * dxS + dyS * dyS) / Math.max(1, hemYPre - shY);
+      sleeve = lenS < 0.24 ? 'cap' : lenS < 0.48 ? 'short' : lenS < 0.78 ? 'threeq' : 'long';
+      cuffY = Math.max(cuffYraw, armpitY + (hemYPre - shY) * 0.06);
     }
     var sr = SLEEVE_RATIO[sleeve] || SLEEVE_RATIO.short;
 
-    var hemY = bot - Math.max(1, Math.round(HH * 0.01));
+    var hemY = hemYPre;
     var chestY = shY + (hemY - shY) * 0.458;      // 옷본과 같은 자리
     var waistY = shY + (hemY - shY) * 0.649;
     function coreHalf(y) {
