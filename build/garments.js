@@ -1102,7 +1102,28 @@
         rq.onsuccess = function () { res(rq.result || []); };
         rq.onerror = function () { rej(rq.error); };
       });
+    }).then(function (items) {
+      return Promise.all(items.map(decodeItem));
     }).catch(function () { return []; });
+  }
+
+  /** 저장된 PNG를 화면에 쓸 픽셀로 되돌린다(예전 항목은 픽셀이 이미 있다) */
+  function decodeItem(it) {
+    if (!it || (it.pixels && it.pixels.length) || !it.png) return Promise.resolve(it);
+    return new Promise(function (res) {
+      var im = new Image();
+      im.onload = function () {
+        var cv = document.createElement('canvas');
+        cv.width = it.w; cv.height = it.h;
+        var c = cv.getContext('2d');
+        c.clearRect(0, 0, it.w, it.h);
+        c.drawImage(im, 0, 0);
+        it.pixels = c.getImageData(0, 0, it.w, it.h).data;
+        res(it);
+      };
+      im.onerror = function () { res(it); };
+      im.src = it.png;
+    });
   }
 
   function removeUser(id) {
@@ -1145,8 +1166,11 @@
 
   /**
    * 사진 → 카탈로그 항목.
-   * 픽셀을 통째로 저장한다(용량은 크지만 재인코딩 손실이 없고, 무엇보다
-   * **이 브라우저 밖으로 나가지 않는다**는 약속을 그대로 지킨다).
+   *
+   * 저장은 **PNG**로 한다. 예전에는 픽셀 배열을 통째로 넣었다 — "재인코딩
+   * 손실이 없다"는 이유였는데, PNG는 무손실이므로 그 이유가 성립하지 않는다.
+   * 그러면서 한 벌에 4.1MB를 먹었다. 옷 스무 벌이면 80MB다.
+   * 어느 쪽이든 **이 브라우저 밖으로 나가지 않는다**는 약속은 그대로다.
    */
   function importPhoto(source, meta) {
     var cut = cutout(source, 560);
@@ -1159,6 +1183,7 @@
     var built = isBottom ? bottomAnchorsOf(P) : topAnchorsOf(P);
     var px = cut.ctx.getImageData(0, 0, cut.w, cut.h).data;
     var item = {
+      png: cut.canvas.toDataURL('image/png'),
       id: 'u-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e4).toString(36),
       ko: meta.ko || '내 옷', cat: meta.cat || 'top', style: meta.style || 'casual',
       material: meta.material || 'cotton', userPhoto: true,
@@ -1166,9 +1191,10 @@
       // 소매·기장 종류는 피팅 쪽에서 쓴다(소매 조각을 만들지 말지 등)
       sleeve: P.sleeve || null, hem: P.hem || null,
       shape: P.isSkirt ? 'skirt' : (isBottom ? 'pants' : null),
-      pixels: Array.prototype.slice.call(px),
       createdAt: Date.now()
     };
+    // 이번 세션에서는 방금 만든 픽셀을 그대로 쓴다(다시 디코딩할 이유가 없다)
+    item.pixels = px;
     _userById[item.id] = item;
     return item;
   }
