@@ -59,6 +59,8 @@
             'aria-label="원본과 피팅 결과 비교" class="fit-range">' +
           '<div class="fit-hint hint">손잡이를 좌우로 밀면 원본과 겹쳐 볼 수 있습니다.</div>' +
 
+          '<details class="fit-fold"><summary>세부 조절 — 여유분 · 기장 · 위치 · 빛</summary>' +
+          '<div class="fit-fold-body">' +
           '<div class="fit-sliders">' +
             '<label class="fit-sl"><span>여유분</span>' +
               '<input type="range" id="fitEase" min="70" max="150" value="100">' +
@@ -75,6 +77,7 @@
           '</div>' +
           '<label class="fit-check"><input type="checkbox" id="fitErase" checked> ' +
             '원래 입은 옷 지우기 <span class="hint">(드러난 부분은 주변 색으로 메웁니다)</span></label>' +
+          '</div></details>' +
 
           '<div class="btn-row" style="margin-top:12px">' +
             '<button class="btn" id="fitClear">모두 벗기</button>' +

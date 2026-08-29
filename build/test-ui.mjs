@@ -90,6 +90,12 @@ await page.locator('#fitGrid .fit-item').nth(2).click();
 await page.waitForTimeout(2000);
 await page.locator('#fitColorBox .fit-sw').nth(3).click();
 await page.waitForTimeout(2000);
+// 세부 조절은 접혀 있다 (스크롤을 줄이려고) — 펴고 만진다
+await page.evaluate(() => {
+  const d = document.querySelector('.tab-panel[data-panel="tryon"] .fit-fold');
+  if (d) d.open = true;
+});
+await page.waitForTimeout(200);
 await page.locator('#fitEase').fill('118');
 await page.dispatchEvent('#fitEase','input');
 await page.waitForTimeout(1500);
