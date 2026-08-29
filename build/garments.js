@@ -693,6 +693,16 @@
     G({ id: 't-deepv-drape', g: 'f', ko: '드레이프 브이넥', cat: 'top', style: 'chic', material: 'silk', baseHex: '#3A3540', neck: 'deepv', sleeve: 'long', hem: 'hip', fit: 1.10, details: [] }),
     G({ id: 't-cable', ko: '케이블 니트', cat: 'top', style: 'classic', material: 'knit', baseHex: '#E4DCC8', neck: 'crew', sleeve: 'long', hem: 'hip', fit: 1.14, details: ['rib', 'cuff'] }),
 
+    /* ---------- 상의 · 여름 ----------
+     * 남성이 볼 수 있는 반팔이 라운드 티와 폴로 두 벌뿐이었다. 크롭탑·
+     * 슬리브리스는 여성 전용 태그라 남는 것이 없었고, 그래서 여름 코디는
+     * 사실상 같은 티셔츠 하나로만 만들어졌다. */
+    G({ id: 't-open-collar', ko: '오픈카라 반팔 셔츠', cat: 'top', style: 'casual', material: 'linen', baseHex: '#E3DCC9', neck: 'shirt', sleeve: 'short', hem: 'hip', fit: 1.14, details: ['button', 'pocket'] }),
+    G({ id: 't-boxy-tee', ko: '박시 반팔 티셔츠', cat: 'top', style: 'street', material: 'jersey', baseHex: '#8C8F86', neck: 'crew', sleeve: 'short', hem: 'hip', fit: 1.20, shoulderHalf: .315, details: [] }),
+    G({ id: 't-summer-knit', ko: '서머 니트 반팔', cat: 'top', style: 'minimal', material: 'knit', baseHex: '#A8AEB4', neck: 'crew', sleeve: 'short', hem: 'hip', fit: 1.02, details: ['rib'] }),
+    G({ id: 't-henley', ko: '헨리넥 반팔', cat: 'top', style: 'casual', material: 'jersey', baseHex: '#7C6A5C', neck: 'crew', sleeve: 'short', hem: 'hip', fit: 1.04, details: ['button'] }),
+    G({ id: 't-pique-half-zip', ko: '반집업 반팔 니트', cat: 'top', style: 'classic', material: 'knit', baseHex: '#4E6357', neck: 'turtle', sleeve: 'short', hem: 'hip', fit: 1.06, details: ['zip', 'rib'] }),
+
     /* ---------- 아우터 ---------- */
     G({ id: 'o-blazer', ko: '테일러드 블레이저', cat: 'outer', style: 'office', material: 'wool', baseHex: '#3B4250', neck: 'deepv', sleeve: 'long', hem: 'thigh', fit: 1.12, shoulderHalf: .310, details: ['button', 'pocket', 'cuff'] }),
     G({ id: 'o-blazer-oversize', ko: '오버사이즈 블레이저', cat: 'outer', style: 'street', material: 'wool', baseHex: '#6B6257', neck: 'deepv', sleeve: 'long', hem: 'thigh', fit: 1.32, shoulderHalf: .345, details: ['button', 'pocket'] }),
@@ -704,6 +714,9 @@
     G({ id: 'o-tweed-jk', g: 'f', ko: '트위드 재킷', cat: 'outer', style: 'office', material: 'tweed', baseHex: '#C9BCB2', neck: 'crew', sleeve: 'long', hem: 'hip', fit: 1.08, details: ['button', 'pocket'] }),
     G({ id: 'o-windbreak', ko: '윈드브레이커', cat: 'outer', style: 'sporty', material: 'tech', baseHex: '#1F5F52', neck: 'turtle', sleeve: 'long', hem: 'hip', fit: 1.26, details: ['zip', 'pocket', 'rib'] }),
     G({ id: 'o-shirt-jk', ko: '셔츠 재킷', cat: 'outer', style: 'street', material: 'wool', baseHex: '#6E7B6A', neck: 'shirt', sleeve: 'long', hem: 'thigh', fit: 1.24, details: ['button', 'pocket'] }),
+    /* 여름 겉옷 — 냉방과 저녁 바람에 걸치는 한 겹. 겨울 아우터만 있으면
+     * 여름 코디에 레이어를 하나도 얹을 수 없다. */
+    G({ id: 'o-linen-jk', ko: '린넨 재킷', cat: 'outer', style: 'chic', material: 'linen', baseHex: '#C6BCA6', neck: 'deepv', sleeve: 'long', hem: 'thigh', fit: 1.16, shoulderHalf: .305, details: ['button', 'pocket'] }),
 
     /* ---------- 하의 ---------- */
     G({ id: 'b-slim-denim', ko: '슬림 데님', cat: 'bottom', shape: 'pants', style: 'casual', material: 'denim', baseHex: '#3E5A7E', hem: 'ankle', fit: .94, legHalf: .098, taper: .80, details: ['pocket'] }),
@@ -714,6 +727,19 @@
     G({ id: 'b-chino', ko: '치노 팬츠', cat: 'bottom', shape: 'pants', style: 'classic', material: 'cotton', baseHex: '#B8A588', hem: 'ankle', fit: 1.00, legHalf: .118, taper: .90, details: ['pocket'] }),
     G({ id: 'b-cord', ko: '코듀로이 팬츠', cat: 'bottom', shape: 'pants', style: 'classic', material: 'corduroy', baseHex: '#7A5C42', hem: 'ankle', fit: 1.04, legHalf: .128, taper: .95, details: ['pocket'] }),
     G({ id: 'b-jogger', ko: '조거 팬츠', cat: 'bottom', shape: 'pants', style: 'sporty', material: 'tech', baseHex: '#33383D', hem: 'ankle', fit: 1.06, legHalf: .118, taper: .72, details: ['pocket'] }),
+
+    /* ---------- 하의 · 여름 ----------
+     * 하의 여덟 벌이 전부 발목 기장이었다 — 반바지가 한 벌도 없었다.
+     * 엔진은 thigh 기장을 이미 지원하므로 카탈로그만 비어 있던 셈이다. */
+    /* 반바지의 legHalf 는 긴 바지보다 **훨씬 넓다.**
+     * 긴 바지 값(.12~.13)을 그대로 쓰면, 골반(.255)에서 밑단까지 좁아지는
+     * 폭이 짧은 인심 안에서 다 일어나 다리가 쐐기처럼 뾰족해진다.
+     * 실제 반바지는 통을 그대로 둔 채 길이만 자른 것이라, 밑단 폭이
+     * 골반의 0.8배쯤 된다. */
+    G({ id: 'b-chino-shorts', ko: '치노 반바지', cat: 'bottom', shape: 'pants', style: 'classic', material: 'cotton', baseHex: '#BCAE93', hem: 'thigh', fit: 1.02, legHalf: .161, taper: 1.02, details: ['pocket'] }),
+    G({ id: 'b-denim-shorts', ko: '데님 반바지', cat: 'bottom', shape: 'pants', style: 'casual', material: 'denim', baseHex: '#7A97BC', hem: 'thigh', fit: 1.00, legHalf: .162, taper: .98, details: ['pocket'] }),
+    G({ id: 'b-linen-shorts', ko: '린넨 와이드 쇼츠', cat: 'bottom', shape: 'pants', style: 'chic', material: 'linen', baseHex: '#CFC6B2', hem: 'thigh', fit: 1.10, legHalf: .177, taper: 1.12, details: ['pocket'] }),
+    G({ id: 'b-linen-easy', ko: '린넨 이지 팬츠', cat: 'bottom', shape: 'pants', style: 'casual', material: 'linen', baseHex: '#B6B2A4', hem: 'ankle', fit: 1.12, legHalf: .152, taper: 1.08, details: ['pocket'] }),
     G({ id: 'b-aline-skirt', g: 'f', ko: 'A라인 스커트', cat: 'bottom', shape: 'skirt', style: 'romantic', material: 'cotton', baseHex: '#C2A9B8', hem: 'knee', fit: 1.00, flare: 1.35, details: [] }),
     G({ id: 'b-pencil-skirt', g: 'f', ko: '펜슬 스커트', cat: 'bottom', shape: 'skirt', style: 'office', material: 'wool', baseHex: '#3A3B42', hem: 'knee', fit: .96, flare: 1.02, details: [] }),
     G({ id: 'b-pleats-skirt', g: 'f', ko: '플리츠 스커트', cat: 'bottom', shape: 'skirt', style: 'chic', material: 'silk', baseHex: '#7A8B7E', hem: 'knee', fit: 1.02, flare: 1.42, details: [] }),

@@ -1529,9 +1529,18 @@
        * 지우고 피부색으로 칠하니 신발 위에 살색 띠가 생겼다.
        * 무릎 아래로 짧아진 바지(반바지·크롭)는 여전히 정강이를 지운다. */
       var shoeTop = L.bottom - (L.bottom - L.hip.y) * 0.07;
-      var botRaw = (bandBot === -Infinity ? L.hip.y : bandBot) + L.headH * 0.10;
-      var bot = Math.round(Math.min(h - 1, botRaw,
-        Math.max(shoeTop, bandBot === -Infinity ? L.hip.y : bandBot)));
+      var bandBotY = bandBot === -Infinity ? L.hip.y : bandBot;
+      var botRaw = bandBotY + L.headH * 0.10;
+      var bot;
+      if (legHem != null && legHem < shoeTop) {
+        /* 새 하의가 신발선보다 위에서 끝난다 = 반바지·크롭.
+         * 밑단부터 신발선까지는 **드러난 다리**이므로, 원래 바지를 지우고
+         * 피부로 칠해야 한다. 밑단 조금 아래에서 멈추면 반바지 아래로
+         * 원래 청바지가 그대로 남는다 — 반바지를 넣자마자 그렇게 나왔다. */
+        bot = Math.round(Math.min(h - 1, shoeTop));
+      } else {
+        bot = Math.round(Math.min(h - 1, botRaw, Math.max(shoeTop, bandBotY)));
+      }
       for (var y = top; y <= bot; y++) {
         for (var x = 0; x < w; x++) {
           var p = y * w + x;
@@ -1567,9 +1576,24 @@
       }
       var lmeanB = ln ? lsum / ln : 128;
 
-      /* 옷깃이 드러낼 수 있는 높이의 한계 — 어깨에서 허리까지의 18% 아래로는
-       * 어떤 목선도 내려오지 않는다(깊은 브이넥도 여기까지다). */
-      var chestLine = L.shoulder.y + (L.waist.y - L.shoulder.y) * 0.18;
+      /* 옷의 구멍은 허리 위에서만 찾는다. 아래에서는 두 다리 사이가
+       * 좌·우·아래로 둘러싸인 것처럼 보일 수 있다. */
+      var waistLine = L.waist.y;
+      var hasOuter = false;
+      for (var lo = 0; lo < report.layers.length; lo++) {
+        if (report.layers[lo].cat === 'outer') hasOuter = true;
+      }
+      var hLim = Math.max(6, Math.round(w * 0.22));
+      var vLim = Math.max(6, Math.round(h * 0.10));
+      function enclosed(x, y) {
+        var i, base = y * w, ok = 0;
+        for (i = 1; i <= hLim && x - i >= 0; i++) if (covered[base + x - i]) { ok |= 1; break; }
+        if (!(ok & 1)) return false;
+        for (i = 1; i <= hLim && x + i < w; i++) if (covered[base + x + i]) { ok |= 2; break; }
+        if (!(ok & 2)) return false;
+        for (i = 1; i <= vLim && y + i < h; i++) if (covered[(y + i) * w + x]) { ok |= 4; break; }
+        return ok === 7;
+      }
       var nSkin = 0, skinFilled = new Uint8Array(w * h);
       for (var y2 = top; y2 <= bot; y2++) {
         for (var x2 = 0; x2 < w; x2++) {
@@ -1579,17 +1603,19 @@
           var core = body.rows[y2];
           var outOfTorso = !core || core.cx0 < 0 || x2 < core.cx0 - 1 || x2 > core.cx1 + 1;
           var isArm = sleeveEnd != null && y2 > sleeveEnd + 2 && outOfTorso;
-          /* (다) 새 옷의 목선이 원래 옷보다 얕으면 그 사이 **윗가슴**이 드러난다.
-           * 여기도 무엇이 있어야 하는지 안다 — 목에서 이어지는 피부다.
-           * 확산에 맡기면 옷깃 위로 살색이 번져 뿌연 얼룩이 됐다.
-           * 옷깃은 가운데에 있으므로 중심 가까이만 본다 — 어깨에 내려온
-           * 머리카락까지 피부로 칠하지 않기 위해서다. */
-          var isChest = false;
-          if (!isLeg && !isArm && y2 < chestLine && core && core.cx0 >= 0) {
-            var cxr = (core.cx0 + core.cx1) / 2;
-            isChest = Math.abs(x2 - cxr) < (core.cx1 - core.cx0) * 0.25;
-          }
-          if (!isLeg && !isArm && !isChest) continue;
+          /* (다) **새 옷이 만든 구멍** — 목선·앞여밈처럼 옷에 둘러싸인 빈 자리.
+           * 확산에 맡기면 원래 옷 색이 그 안으로 번져, 브이넥 자리에
+           * 회청색 쐐기가 어깨를 가로질러 앉는다(아우터 전부가 그랬다).
+           * 구멍인지 아닌지는 추정하지 않고 **둘러싸여 있는지**로 본다 —
+           * 좌·우·아래 모두 가까이에 새 옷이 있으면 그건 옷의 구멍이다.
+           * 어깨에 내려온 머리카락은 위가 뚫려 있으므로 걸리지 않는다. */
+          var isNeck = !isLeg && !isArm && y2 < waistLine && enclosed(x2, y2);
+          if (!isLeg && !isArm && !isNeck) continue;
+          /* 구멍 안에 무엇을 둘까.
+           * 아우터는 **겹쳐 입는 옷**이다. 재킷의 여밈 사이로는 원래 입고
+           * 있던 옷이 보이는 것이 맞다 — 지어내지 않고 사진을 그대로 둔다.
+           * 상의·원피스는 겹쳐 입는 것이 아니므로 그 자리는 피부다. */
+          if (isNeck && hasOuter) { known[p2] = 1; reveal[p2] = 0; nRev--; continue; }
           var lf2 = clamp(body.light[p2] / lmeanB, 0.68, 1.34);
           var i3 = p2 * 4;
           od[i3]     = clamp(skinRGB.r * lf2, 0, 255);
