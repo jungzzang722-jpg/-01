@@ -1207,8 +1207,24 @@
      * 몸통 천이 얹힌다. */
     var armY = wideAboveY != null ? wideAboveY
       : (A.armL ? A.armL[1] : (A.hemL ? A.hemL[1] : 1e9));
+    /* 목 대응점은 **깃이 어깨보다 위로 올라올 때만** 사다리에 넣는다.
+     *
+     * 목선의 반폭은 "몸이 이만큼 좁다"가 아니라 "옷깃이 이만큼 파였다"는
+     * 뜻이다. 그런데 목선이 어깨선보다 **아래**인 옷(셔츠 칼라·라펠)에서는
+     * 사다리가 어깨(반폭 138) → 목(반폭 48) 순으로 들어가, 어깨 바로 아래
+     * 몇 픽셀에서 울타리가 목 너비로 쪼그라든다. 그 좁아진 구간을 옷이
+     * 못 칠하고, 안에 입은 옷이 어깨 위로 띠처럼 드러났다 —
+     * 트렌치 위로 빨간 하프집이 얹혀 보인 것이 이것이다.
+     *
+     * 깃이 어깨 위로 올라오는 옷(터틀넥·후드)에서는 목이 실제로 맨 위
+     * 지점이므로 그대로 쓴다. */
+    var neckAboveSh = (function () {
+      if (!A.neckL || !A.neckR || !A.shL || !A.shR) return true;
+      return (A.neckL[1] + A.neckR[1]) / 2 < (A.shL[1] + A.shR[1]) / 2 - 0.5;
+    })();
     var lv = [];
     ['neck', 'sh', 'pit', 'chest', 'waist', 'hip', 'hem'].forEach(function (k) {
+      if (k === 'neck' && !neckAboveSh) return;
       var l = A[k + 'L'], r = A[k + 'R'];
       if (l && r) lv.push([(l[1] + r[1]) / 2, (r[0] - l[0]) / 2, (l[0] + r[0]) / 2]);
     });
@@ -1549,9 +1565,23 @@
     var bandTop = Infinity, bandBot = -Infinity;
     var legHem = null, sleeveEnd = null;
 
+    var layerMasks = [];
+    /* 지금까지 그린 옷이 도달한 가장 높은 지점. 다음 층은 최소한 여기까지
+     * 올라와야 아래층이 어깨 위로 삐져나오지 않는다. */
+    var stackTop = null;
+    var lopts = opts;
     for (var li = 0; li < layers.length; li++) {
-      var res = applyLayer(body, layers[li], od, covered, opts);
+      lopts = stackTop == null ? opts : Object.assign({}, opts, { _stackTop: stackTop });
+      var res = applyLayer(body, layers[li], od, covered, lopts);
       if (!res) continue;
+      /* 접촉 그림자를 드리울 주체는 **이 옷이 칠한 자리**다.
+       * "새로 덮인 픽셀"로 잡으면 아래층과 겹친 부분이 빠져 마스크에 구멍이
+       * 생기고, 그 구멍에 자기 그림자가 드리워 티셔츠 한가운데 검은 띠가
+       * 가로질렀다. */
+      if (res.painted) layerMasks.push(res.painted);
+      if (res.anchors && res.anchors._topY != null && res.cat !== 'bottom') {
+        stackTop = stackTop == null ? res.anchors._topY : Math.min(stackTop, res.anchors._topY);
+      }
       report.layers.push(res);
       // 원래 옷을 지울 범위는 **실제로 입힌 옷이 덮는 세로 구간**이다.
       // 고정된 몸통 밴드로 잡으면 아무것도 안 입힌 부위까지 지우게 된다.
@@ -1713,6 +1743,52 @@
       }
     }
 
+    /* --- 접촉 그림자 -------------------------------------------------
+     *
+     * 옷이 몸 위에 **떠 있어 보이는** 가장 큰 이유가 이것이다. 실제 사진에서
+     * 옷의 밑단·소맷부리 바로 아래는 반드시 어둡다 — 천이 빛을 막고, 천과
+     * 피부 사이에 틈이 있기 때문이다. 그 한 줄이 없으면 아무리 윤곽을 잘
+     * 맞춰도 스티커를 붙인 것처럼 보인다.
+     *
+     * 만드는 법은 단순하다. 빛은 위에서 오므로 그림자는 아래에 생긴다.
+     * 옷에 덮이지 않은 픽셀에서 위쪽을 훑어 그 옷을 만나면, 거리에 반비례해
+     * 어둡게 한다. 옷 자신의 안쪽은 건드리지 않는다.
+     *
+     * 위층 옷이 아래층 옷에도 그림자를 드리워야 한다(티셔츠 밑단이 청바지
+     * 위에). 그래서 옷마다 자기 영역을 따로 들고 있다가 각자 드리운다.
+     * ----------------------------------------------------------------- */
+    var shAmt = opts.contactShadow == null ? 1 : opts.contactShadow;
+    if (shAmt > 0.01 && layerMasks.length) {
+      var R = Math.max(3, Math.round(h * 0.016));
+      var dark = new Float32Array(w * h);
+      for (var si = 0; si < layerMasks.length; si++) {
+        var sm = layerMasks[si];
+        for (var sy = 0; sy < h; sy++) {
+          for (var sx = 0; sx < w; sx++) {
+            var sp = sy * w + sx;
+            if (!body.mask[sp] || sm[sp]) continue;   // 옷 자신은 그늘지지 않는다
+            for (var dy = 1; dy <= R; dy++) {
+              var up = sp - dy * w;
+              if (up < 0) break;
+              if (sm[up]) {
+                // 가장자리에서 가장 진하고 부드럽게 사라진다
+                var f = (1 - (dy - 1) / R);
+                var v = f * f * 0.20 * shAmt;
+                if (v > dark[sp]) dark[sp] = v;
+                break;
+              }
+            }
+          }
+        }
+      }
+      for (var dp = 0; dp < w * h; dp++) {
+        if (dark[dp] <= 0.002) continue;
+        var g = 1 - dark[dp], j4 = dp * 4;
+        od[j4] *= g; od[j4 + 1] *= g; od[j4 + 2] *= g;
+      }
+      report.contactShadow = R;
+    }
+
     return { imageData: out, report: report };
   }
 
@@ -1734,7 +1810,7 @@
    *
    * 반환: 행 → [x0, x1] (없으면 null). 조각 이름별로 따로 만든다.
    * ===================================================================== */
-  function coverageOf(body, spec, anchors, over) {
+  function coverageOf(body, spec, anchors, over, stackTop) {
     var w = body.w, h = body.h;
     var L = body._lmSane || (body._lmSane = saneLM(body.lm));
     var span = { torso: null, armL: null, armR: null, legL: null, legR: null };
@@ -1752,6 +1828,20 @@
 
     var y0 = Math.round(anchors._topY != null ? anchors._topY : L.shoulder.y);
     var y1 = Math.round(anchors._hemY != null ? anchors._hemY : L.bottom);
+
+    /* 겹쳐 입으면 **위층이 아래층보다 높이 올라가야 한다.**
+     *
+     * 옷마다 목선 표(NECK)가 다르므로 시작 높이도 다르다. 하프집(터틀)은
+     * topY 166, 그 위에 걸친 트렌치는 184 — 안쪽 옷이 18px 더 높다.
+     * 그러면 어깨 위로 안쪽 옷이 띠처럼 삐져나온다. 실제로 빨간 하프집이
+     * 트렌치 어깨 위에 얹혀 있었다.
+     *
+     * 목선은 그대로 둔다. 몸통 조각은 여전히 옷본의 알파를 쓰므로 카디건
+     * 앞으로 터틀넥 목이 보이는 것 같은 자연스러운 겹침은 유지된다.
+     * 여기서 올리는 것은 어깨와 소매의 **덮개 범위**뿐이다. */
+    if (spec.cat !== 'bottom' && stackTop != null && stackTop < y0) {
+      y0 = Math.max(Math.round(stackTop), Math.round(L.top != null ? L.top : 0));
+    }
 
     if (spec.cat === 'bottom') {
       span.torso = alloc(); span.legL = alloc(); span.legR = alloc();
@@ -1792,12 +1882,26 @@
     var env = torsoBound(anchors, anchors.armL ? anchors.armL[1] : -1e9);
     var lap = Math.max(2, Math.round(w * 0.006));   // 몸통과 소매가 만나는 겹침
 
+    /* 어깨선 위에는 **깃밖에 없다.**
+     *
+     * 봉투는 목(166, 반폭 39)에서 어깨(184, 반폭 119)로 가파르게 벌어지므로,
+     * 어깨 바로 위 몇 픽셀에서 이미 반폭이 114까지 자란다. 그 폭으로 덮개를
+     * 열어 주면 터틀넥 깃이 어깨 위에서 172px 짜리 띠가 된다 — 위에 코트를
+     * 걸쳤을 때 그 띠가 어깨 위로 삐져나와 보인 원인이다.
+     *
+     * 어떤 옷이든 어깨선 위로 올라오는 부분은 깃이고, 깃은 목 굵기다. */
+    var shY0 = anchors._shY != null ? anchors._shY : L.shoulder.y;
+    var neckHalf = (anchors.neckL && anchors.neckR)
+      ? (anchors.neckR[0] - anchors.neckL[0]) / 2 : null;
+
     span.torso = alloc();
     for (var y = Math.max(0, y0); y <= Math.min(h - 1, y1); y++) {
       var q = env.halfAt(y);
       var sp = spanAt(body, y, false);
-      var tl = Math.max(q.cx - q.half * 1.06 - over, sp.x0 - over);
-      var tr = Math.min(q.cx + q.half * 1.06 + over, sp.x1 + over);
+      var lim = q.half * 1.06;
+      if (neckHalf != null && y < shY0) lim = Math.min(lim, neckHalf * 1.5);
+      var tl = Math.max(q.cx - lim - over, sp.x0 - over);
+      var tr = Math.min(q.cx + lim + over, sp.x1 + over);
       put(span.torso, y, tl, tr);
     }
 
@@ -1891,7 +1995,7 @@
     /* 옷의 윤곽을 몸에서 만든다 (coverageOf 주석 참고).
      * allow 는 "여기까지 나가도 된다"는 바깥 한계일 뿐이고, 실제 경계는
      * 이 덮개가 정한다. 둘 다 통과해야 칠한다. */
-    var cover = coverageOf(body, spec, anchors, over);
+    var cover = coverageOf(body, spec, anchors, over, gopts && gopts._stackTop);
 
     /* --- 조명장 정규화 : 이 옷이 놓일 영역의 평균 밝기를 1로 --- */
     var lmean = meanLightOver(body, allow, anchors);
@@ -2057,7 +2161,9 @@
     return {
       id: layer.garmentId, ko: spec.ko, cat: spec.cat,
       colorHex: layer.colorHex || null,
-      anchors: anchors, recolor: recolorInfo, pixels: nPix
+      anchors: anchors, recolor: recolorInfo, pixels: nPix,
+      // 이 옷이 실제로 칠한 자리 (접촉 그림자용)
+      painted: done
     };
   }
 
