@@ -17,12 +17,13 @@ const out = await p.evaluate(() => {
     sclera: { L: Math.min(88, L + 10), a: 0.2, b: 2.4 },
     lip: { L: L - 12, a: a + 8, b: bb * 0.6 },
     neutral: wbm === 'none' ? null
-      : { lab: { L: Math.min(88, L + 10), a: 0.2, b: 2.4 }, chroma: CC.SCLERA_CHROMA, src: wbm },
+      : { lab: { L: Math.min(88, L + 10), a: 0.2, b: 2.4 }, chroma: CC.SCLERA_CHROMA,
+          src: wbm === 'flash' ? 'sclera' : wbm },
     wb: { method: wbm === 'none' ? 'shades_of_gray' : wbm, cast: 0.06, clip: { imbalance: 0.01 } },
     quality: { skinVarL: 3.4 }
   });
   const res = {};
-  for (const wbm of ['sclera', 'gray_surface', 'none']) {
+  for (const wbm of ['flash', 'sclera', 'gray_surface', 'none']) {
     const sizes = [], settled = [], seasonSettled = [], sigmas = [];
     for (let L = 54; L <= 72; L += 3)
     for (let a = 10; a <= 18; a += 2)
