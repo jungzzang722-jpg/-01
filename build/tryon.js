@@ -1060,7 +1060,10 @@
       cuffInR: [(armEdge.sepR ? armEdge.Rin : axis + armHalf * 0.55), armY],
       waistL: wp.L, waistR: wp.R,
       hemL: [axis - hemHalf2, hemY2], hemR: [axis + hemHalf2, hemY2],
-      _hemY: hemY2, _topY: Math.min(neckY, shY), _shY: shY, _neckY: neckY
+      _hemY: hemY2, _topY: Math.min(neckY, shY), _shY: shY, _neckY: neckY,
+      // 소매가 끝나는 높이. 덮개(coverageOf)가 이 값으로 팔을 어디까지
+      // 맡을지 정한다 — 대응점만으로는 "여기서 끝"을 알 수 없다.
+      _sleeveEndY: sleeveKey === 'none' ? null : armY
     };
   }
 
@@ -1300,7 +1303,7 @@
       if (!anchors.legL || !G.anchors.legL) {
         if (pb.dst.length >= 4) {
           parts.push({ name: 'bottom', dst: pb.dst, src: pb.src, test: null,
-                       bound: bBound, wrap: true });
+                       bound: bBound, wrap: true, fillCover: true });
         }
         return parts;
       }
@@ -1309,13 +1312,13 @@
       [['legL', -1], ['legR', 1]].forEach(function (sd) {
         var key = sd[0], sign = sd[1];
         parts.push({
-          name: key, dst: anchors[key], src: G.anchors[key],
+          name: key, dst: anchors[key], src: G.anchors[key], fillCover: true,
           test: function (gx, gy) { return gy >= gCrotch && (gx - gcx) * sign >= -1; }
         });
       });
       // 엉덩이·허리 블록은 가랑이 위쪽만 맡는다
       parts.push({
-        name: 'seat', dst: pb.dst, src: pb.src, wrap: true, bound: bBound,
+        name: 'seat', dst: pb.dst, src: pb.src, wrap: true, bound: bBound, fillCover: true,
         clampFn: function (uv) { if (uv[1] > gCrotch) uv[1] = gCrotch; }
       });
       return parts;
@@ -1428,7 +1431,7 @@
       // 뜬금없이 생긴다 — 실제로 초록 밴드가 그렇게 나타났다.
       var cuffLimit = G.anchors['arm' + side][1] * 1.03;
       parts.push({
-        name: 'sleeve' + side, dst: ps.dst, src: ps.src, tight: true, xspan: xspanFn,
+        name: 'sleeve' + side, dst: ps.dst, src: ps.src, tight: true, xspan: xspanFn, fillCover: true,
         test: function (gx, gy) {
           return gy >= pitY * 0.92 && gy <= cuffLimit && (gx - cx) * sign > half * 0.94;
         }
@@ -1715,6 +1718,126 @@
 
   function countMask(m) { var n = 0; for (var i = 0; i < m.length; i++) if (m[i]) n++; return n; }
 
+  /* =======================================================================
+   * 옷의 윤곽은 옷본이 아니라 **몸**이 정한다
+   *
+   * 지금까지 옷의 경계는 "TPS 로 휜 옷본의 알파"였다. 그래서 매핑이 조금만
+   * 어긋나면 그 어긋남이 그대로 윤곽의 결함이 됐다. 실제로 나온 것들:
+   *   · 팔 위에 소매가 **떨어진 조각**으로 뜬다 (사용자가 말한 "미역줄기")
+   *   · 허리 옆에 혹이 붙는다
+   *   · 어깨가 실루엣 밖으로 삐져나와 날개가 된다
+   * 셋 다 원인이 같다 — 윤곽을 옷본에서 가져왔기 때문이다.
+   *
+   * 옷본은 무늬와 재단(목선·소매 길이·기장·여유분)을 줄 뿐이고, **어디까지
+   * 덮는가는 몸이 정한다.** 행마다 구간을 하나씩만 만들기 때문에 떠 있는
+   * 조각이 구조적으로 생길 수 없다.
+   *
+   * 반환: 행 → [x0, x1] (없으면 null). 조각 이름별로 따로 만든다.
+   * ===================================================================== */
+  function coverageOf(body, spec, anchors, over) {
+    var w = body.w, h = body.h;
+    var L = body._lmSane || (body._lmSane = saneLM(body.lm));
+    var span = { torso: null, armL: null, armR: null, legL: null, legR: null };
+
+    function alloc() {
+      var a = new Int16Array(h * 2);
+      a.fill(-1);
+      return a;
+    }
+    function put(a, y, x0, x1) {
+      if (y < 0 || y >= h || x1 < x0) return;
+      a[y * 2] = clamp(Math.round(x0), 0, w - 1);
+      a[y * 2 + 1] = clamp(Math.round(x1), 0, w - 1);
+    }
+
+    var y0 = Math.round(anchors._topY != null ? anchors._topY : L.shoulder.y);
+    var y1 = Math.round(anchors._hemY != null ? anchors._hemY : L.bottom);
+
+    if (spec.cat === 'bottom') {
+      span.torso = alloc(); span.legL = alloc(); span.legR = alloc();
+      var crotch = anchors.crotchC ? anchors.crotchC[1] : L.crotchY;
+      /* 바지는 가랑이 아래를 다리 조각이 맡는다. 엉덩이 조각까지 밑단까지
+       * 내려가면 두 다리 **사이의 빈 곳**을 칠할 권한이 생긴다.
+       * 치마는 반대로 그 사이가 천이므로 끝까지 맡는다. */
+      var seatBot = anchors.legL ? crotch + (y1 - crotch) * 0.04 : y1;
+      for (var yb = Math.max(0, y0); yb <= Math.min(h - 1, y1); yb++) {
+        var sb = spanAt(body, yb, true);
+        if (yb <= seatBot) put(span.torso, yb, sb.x0 - over, sb.x1 + over);
+        if (yb > crotch) {
+          var le = legEdges(body, yb, sb.cx, sb.w / 2);
+          put(span.legL, yb, le.Lout - over, le.Lin + over);
+          put(span.legR, yb, le.Rin - over, le.Rout + over);
+        } else {
+          /* 가랑이 위는 다리가 갈라지지 않았다. 여기서 좌우로 나누면
+           * 가운데에 없던 솔기가 생긴다 — 두 조각 모두 폭 전체를 받고
+           * 실제 분담은 각 조각의 대응점이 정하게 둔다. */
+          put(span.legL, yb, sb.x0 - over, sb.x1 + over);
+          put(span.legR, yb, sb.x0 - over, sb.x1 + over);
+        }
+      }
+      return span;
+    }
+
+    /* --- 상의 ---
+     *
+     * 몸통과 팔의 경계를 **대응점이 만든 몸통 봉투**로 가른다.
+     *
+     * 예전에는 "옷 구간(tx) 바깥의 맨살이 팔"이라고 봤다. 그런데 사진 속
+     * 사람이 이미 반팔을 입고 있으면 위팔이 옷으로 잡혀서, 팔로 인식되는
+     * 구간이 팔꿈치 근처의 얇은 띠만 남는다. 실측에서 소매 덮개가 43행 ·
+     * 폭 10px 였다 — 그게 화면에 뜨던 그 탭이다.
+     *
+     * 봉투는 그 사람이 뭘 입고 있었는지와 무관하다. 어깨·가슴·허리·골반
+     * 대응점이 만든 폭이므로 팔은 언제나 그 바깥이다. */
+    var env = torsoBound(anchors, anchors.armL ? anchors.armL[1] : -1e9);
+    var lap = Math.max(2, Math.round(w * 0.006));   // 몸통과 소매가 만나는 겹침
+
+    span.torso = alloc();
+    for (var y = Math.max(0, y0); y <= Math.min(h - 1, y1); y++) {
+      var q = env.halfAt(y);
+      var sp = spanAt(body, y, false);
+      var tl = Math.max(q.cx - q.half * 1.06 - over, sp.x0 - over);
+      var tr = Math.min(q.cx + q.half * 1.06 + over, sp.x1 + over);
+      put(span.torso, y, tl, tr);
+    }
+
+    /* 소매 — 팔이 있는 자리 전부. 몸통 봉투 안쪽까지 조금 겹쳐서 끝내면
+     * 둘을 합쳤을 때 행마다 빈틈 없는 한 구간이 된다. 소매가 떠 보이던
+     * 문제의 직접적인 해결이다. 넘침(over)은 주지 않는다 — 팔 옆 허공에
+     * 천이 뜨는 것이 소매에서는 가장 눈에 띄는 결함이다. */
+    var sleeveEnd = anchors._sleeveEndY;
+    if (sleeveEnd != null && sleeveEnd > y0) {
+      span.armL = alloc(); span.armR = alloc();
+      for (var ya = Math.max(0, y0); ya <= Math.min(h - 1, Math.round(sleeveEnd)); ya++) {
+        var a2 = limbEdges(body, ya);
+        var q2 = env.halfAt(ya);
+        var inL = q2.cx - q2.half, inR = q2.cx + q2.half;
+        /* 폭이 좁다고 건너뛰면 안 된다.
+         *
+         * 어깨 바로 아래는 팔이 몸통 봉투에 거의 붙어 있어 폭이 몇 픽셀밖에
+         * 안 된다. 거기를 소매가 건너뛰면 몸통도 맡지 않는다 — 몸통은 봉투
+         * 밖의 **맨살**을 팔로 보고 피하기 때문이다. 그래서 어깨 바깥쪽에
+         * 살색 노치가 남았다. 폭이 1px 이라도 소매가 맡는다. */
+        if (inL - a2.Lout >= 1) put(span.armL, ya, a2.Lout, inL + lap);
+        if (a2.Rout - inR >= 1) put(span.armR, ya, inR - lap, a2.Rout);
+      }
+    }
+    return span;
+  }
+
+  /** 조각 이름 → 그 조각이 쓸 덮개 구간 */
+  function coverFor(cover, name) {
+    if (!cover) return null;
+    if (name === 'torso' || name === 'seat' || name === 'bottom') {
+      return cover.torso || cover.legL;
+    }
+    if (name === 'sleeveL') return cover.armL;
+    if (name === 'sleeveR') return cover.armR;
+    if (name === 'legL') return cover.legL;
+    if (name === 'legR') return cover.legR;
+    return null;
+  }
+
   function applyLayer(body, layer, od, covered, gopts) {
     var spec = GARMENTS.byId(layer.garmentId);
     if (!spec) return null;
@@ -1765,6 +1888,11 @@
      * 어깨패드 같은 덩어리가 배경 위에 얹혀 있었다. */
     var allowTight = body.mask;
 
+    /* 옷의 윤곽을 몸에서 만든다 (coverageOf 주석 참고).
+     * allow 는 "여기까지 나가도 된다"는 바깥 한계일 뿐이고, 실제 경계는
+     * 이 덮개가 정한다. 둘 다 통과해야 칠한다. */
+    var cover = coverageOf(body, spec, anchors, over);
+
     /* --- 조명장 정규화 : 이 옷이 놓일 영역의 평균 밝기를 1로 --- */
     var lmean = meanLightOver(body, allow, anchors);
     var lightAmt = gopts && gopts.lightAmount != null ? gopts.lightAmount : 0.75;
@@ -1808,11 +1936,52 @@
       var test = part.test, clampFn = part.clampFn;
       var bound = part.bound || null, xspan = part.xspan || null;
       var partAllow = part.tight ? allowTight : allow;
+      var cspan = coverFor(cover, part.name);
+
+      /* 덮개가 경계를 맡으면 조각은 더 이상 "옷본 밖이면 버린다"를 하면 안 된다.
+       *
+       * 소매는 정확도를 위해 옷본을 벗어난 좌표를 버려 왔다. 그런데 윤곽을
+       * 몸에서 가져온 지금은 그게 곧 **구멍**이다 — 몸은 "여기 소매가 있다"고
+       * 하는데 옷본이 "그 좌표는 없다"고 하면 그 자리가 비고, 남은 조각만
+       * 팔 위에 떠 있는 탭이 된다. 사용자가 말한 미역줄기가 이것이었다.
+       *
+       * 덮개가 있는 조각은 옷본의 제 구역(대응점 경계상자) 안으로 좌표를
+       * 잘라서 읽는다. 몸이 덮으라고 한 자리는 반드시 천으로 찬다. */
+      /* 옷본에서 비어 있는 좌표로 떨어지면 조각의 중심 쪽으로 걸어가
+       * 천을 찾는다.
+       *
+       * 대응점은 다리마다 세 높이뿐이라 허벅지의 곡선을 따라가지 못한다.
+       * 실측에서 오른쪽 허벅지 대응점이 실루엣보다 8px 안쪽이었고, 그 틈이
+       * 계단 모양 살색 띠로 남았다. 대응점을 늘리는 것으로는 끝이 없다 —
+       * 몸의 곡선은 몇 개의 점으로 표현되지 않는다.
+       *
+       * 덮개가 "여기는 옷"이라고 한 자리는 반드시 천으로 채운다. 투명한
+       * 좌표를 그냥 알파 1 로 칠하면 검게 나오므로(투명 픽셀의 RGB 는
+       * 0), 실제로 불투명한 좌표를 찾아 그 색을 쓴다. */
+      var fillC = null;
+      if (part.fillCover && cspan) {
+        var cxs = 0, cys = 0;
+        for (var ci = 0; ci < part.src.length; ci++) { cxs += part.src[ci][0]; cys += part.src[ci][1]; }
+        fillC = [cxs / part.src.length, cys / part.src.length];
+      }
+
+      var srcClamp = null;
+      if (cspan && !part.clampFn) {
+        var sxs = part.src.map(function (q) { return q[0]; });
+        var sys = part.src.map(function (q) { return q[1]; });
+        var mg = Math.max(1, Math.min(gw, gh) * 0.004);
+        srcClamp = [Math.min.apply(null, sxs) + mg, Math.min.apply(null, sys) + mg,
+                    Math.max.apply(null, sxs) - mg, Math.max.apply(null, sys) - mg];
+      }
 
       for (var y = by0; y <= by1; y++) {
         for (var x = bx0; x <= bx1; x++) {
           var p = y * w + x;
           if (!partAllow[p] || done[p]) continue;
+          if (cspan) {
+            var c0 = cspan[y * 2], c1 = cspan[y * 2 + 1];
+            if (c0 < 0 || x < c0 || x > c1) continue;
+          }
           if (xspan) {
             var xr = xspan(y);
             if (!xr || x < xr[0] || x > xr[1]) continue;
@@ -1853,8 +2022,23 @@
           // 이 조각이 맡은 옷본 영역으로 좌표를 정리한다.
           // 소매는 벗어나면 버리고(정확도 우선), 몸통은 잘라서 읽는다(구멍 방지).
           if (clampFn) clampFn(uv);
-          else if (test && !test(uv[0], uv[1])) continue;
-          if (!sampleRGBA(gd, gw, gh, uv[0], uv[1], s4)) continue;
+          else if (srcClamp) {
+            uv[0] = clamp(uv[0], srcClamp[0], srcClamp[2]);
+            uv[1] = clamp(uv[1], srcClamp[1], srcClamp[3]);
+          } else if (test && !test(uv[0], uv[1])) continue;
+          if (!sampleRGBA(gd, gw, gh, uv[0], uv[1], s4)) {
+            if (!fillC) continue;
+            s4[3] = 0;
+          }
+          if (fillC && s4[3] < 200) {
+            var fu = uv[0], fv = uv[1], found = false;
+            for (var st = 1; st <= 8; st++) {
+              var t2 = st / 8;
+              if (sampleRGBA(gd, gw, gh, fu + (fillC[0] - fu) * t2, fv + (fillC[1] - fv) * t2, s4)
+                  && s4[3] >= 200) { found = true; break; }
+            }
+            if (!found) continue;
+          }
           // 실루엣 가장자리를 반화소로 녹인다 — 톱니의 원인을 여기서 없앤다
           var a = (s4[3] / 255) * (body.edge ? body.edge[p] : 1);
           if (a < 0.004) continue;
@@ -1975,6 +2159,7 @@
     solveTPS: solveTPS, warpField: warpField, paletteFor: paletteFor,
     HEM_BODY: HEM_BODY, KEYS_TOP: KEYS_TOP, KEYS_BOTTOM: KEYS_BOTTOM,
     saneLM: saneLM, silhouetteLM: silhouetteLM, buildParts: buildParts, limbEdges: limbEdges,
+    coverageOf: coverageOf, coverFor: coverFor,
     wrapU: wrapU, garmentHalfFn: garmentHalfFn, DEFAULT_DEPTH_RATIO: DEFAULT_DEPTH_RATIO,
     clearTintCache: function () { _tintCache = []; }
   };
