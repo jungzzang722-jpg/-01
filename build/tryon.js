@@ -1079,6 +1079,72 @@
     var shHalf = halfFor(gA.shL[1], gG.shHalf);
 
     var pit   = pairAt(gA.pitL[1], gG.bodyHalf * 0.99);
+
+    /* ── 어깨 이음선을 **몸이 실제로 어깨 폭에 이르는 높이**에 놓는다 ──
+     *
+     * 랜드마크의 어깨선(L.shoulder.y)은 폭이 넓어지기 **시작**하는 지점이다.
+     * 거기에 옷의 어깨 끝(최대 폭)을 박으면, 몸은 아직 61%인데 옷은 이미
+     * 최대 폭이라 어깨가 각지게 튀어나온다 — 실측에서 y184 의 몸 반폭이 85,
+     * 옷 반폭이 140 이었다. 사람의 어깨는 그 아래로 50행에 걸쳐 완만히
+     * 넓어진다(반폭 24 → 118).
+     *
+     * 그 완만한 구간의 끝(폭이 평평해지는 곳)이 어깨 이음선이 앉을 자리다.
+     * 겨드랑이보다 아래로는 내려가지 않게 막는다 — 내려가면 순서가 뒤집혀
+     * 옷본의 어깨~겨드랑이 구간이 음수 길이가 된다. */
+    var shSeamY = (function () {
+      var lo = Math.round(shY), hi = Math.round(Math.min(body.h - 1, shY + body.h * 0.075));
+      var pitLimit = Math.round(pit.y - body.h * 0.012);
+      if (hi > pitLimit) hi = pitLimit;
+      if (hi <= lo) return shY;
+      var maxH = 0, prof = [];
+      for (var y = lo; y <= hi; y++) {
+        var rr = body.rows[y];
+        var hh = rr && rr.x0 >= 0 ? (rr.x1 - rr.x0) / 2 : 0;
+        prof.push([y, hh]);
+        if (hh > maxH) maxH = hh;
+      }
+      if (maxH <= 0) return shY;
+      for (var i = 0; i < prof.length; i++) if (prof[i][1] >= maxH * 0.92) return prof[i][0];
+      return shY;
+    })();
+
+    /* 목선에서 어깨 이음선까지의 중간 지점도 몸에서 잡는다.
+     * 양 끝만 맞추면 그 사이를 TPS 가 직선으로 이어 어깨가 다시 평평해진다.
+     * 옷본의 어깨선은 직선이므로 중간 대응점은 그 직선 위를 선형 보간하면
+     * 정확하다 — 옷본을 왜곡하는 것이 아니라 몸의 곡선에 얹는 것이다. */
+    /* 깃을 따로 붙잡는다.
+     *
+     * 어깨 이음선을 내리면 목~어깨 구간이 3.25배로 늘어나는데, TPS 는 그
+     * 근처를 통째로 늘리므로 깃까지 끌려 내려간다 — 라운드넥이 V넥이 됐다.
+     * 깃의 자리는 어깨가 아니라 목이 정하는 값이므로, 어깨를 옮기기 **전의**
+     * 대응(mapY)으로 못 박아 둔다. 그러면 어깨만 움직이고 깃은 제자리다. */
+    var neckPins = (function () {
+      var nk = (GARMENTS.NECK && GARMENTS.NECK[spec.neck]) || null;
+      if (!nk || !GARMENTS.H) return null;
+      var vd = (nk.vdrop == null ? 0.016 : nk.vdrop) * GARMENTS.H;
+      var gnY = gA.neckL[1], gnHalf = gG.cx - gA.neckL[0];
+      var dst = [], src = [];
+      // 가운데 가장 깊은 점 + 좌우 중간 점 — 세 점이면 깃 곡선이 고정된다
+      [[0, 1], [-0.55, 0.60], [0.55, 0.60]].forEach(function (q) {
+        var gy = gnY + vd * q[1];
+        var gx = gG.cx + gnHalf * q[0];
+        src.push([gx, gy]);
+        dst.push([axis + neckHalf * q[0], mapY(gy)]);
+      });
+      return { dst: dst, src: src };
+    })();
+
+    var shMid = (function () {
+      if (shSeamY <= neckY + 2) return null;
+      var t = 0.55;
+      var my = clamp(neckY + (shSeamY - neckY) * t, 0, body.h - 1);
+      var sp = spanAt(body, my, false);
+      if (!(sp.w > 4)) return null;
+      // 몸의 가장자리에 여유분만큼만 얹는다 (어깨 끝과 같은 규칙)
+      var pad = (shHalf - sp.w / 2) * 0.35;
+      if (!(pad > 0)) pad = 0;
+      return { t: t, dst: [[sp.x0 - pad, my], [sp.x1 + pad, my]] };
+    })();
     var chest = pairAt(gA.chestL[1], gG.bodyHalf);
     var wp    = pairAt(gA.waistL[1], gG.waistHalf);
     var hemHalf2 = halfFor(gA.hemL[1], gG.hemHalf);
@@ -1130,7 +1196,7 @@
 
     return {
       neckL: [axis - neckHalf, neckY], neckR: [axis + neckHalf, neckY],
-      shL: [axis - shHalf, shY], shR: [axis + shHalf, shY],
+      shL: [axis - shHalf, shSeamY], shR: [axis + shHalf, shSeamY],
       pitL: pit.L, pitR: pit.R,
       chestL: chest.L, chestR: chest.R,
       // 소매는 몸통과 따로 변형된다(buildParts 참고). 그래서 바깥 가장자리뿐
@@ -1144,6 +1210,8 @@
       waistL: wp.L, waistR: wp.R,
       hemL: [axis - hemHalf2, hemY2], hemR: [axis + hemHalf2, hemY2],
       _hemY: hemY2, _topY: Math.min(neckY, shY), _shY: shY, _neckY: neckY,
+      // 어깨 슬로프 중간 대응점 (buildParts 가 옷본 쪽 짝을 만들어 붙인다)
+      _shMid: shMid, _shSeamY: shSeamY, _neckPins: neckPins,
       // 소매가 끝나는 높이. 덮개(coverageOf)가 이 값으로 팔을 어디까지
       // 맡을지 정한다 — 대응점만으로는 "여기서 끝"을 알 수 없다.
       _sleeveEndY: sleeveKey === 'none' ? null : armY
@@ -1425,6 +1493,27 @@
 
     var pt = withCenters(pairedOnly(KEYS_TORSO, anchors, G.anchors));
     if (pt.dst.length < 4) return parts;
+
+    /* 어깨 슬로프 중간 대응점.
+     * 옷본의 목~어깨 선은 직선이므로 짝은 그 선 위를 선형 보간하면 된다.
+     * 몸 쪽만 실루엣에서 가져오므로, 옷본을 왜곡하는 것이 아니라 직선을
+     * 몸의 곡선에 얹는 것이다. 이게 없으면 양 끝만 맞고 그 사이를 TPS 가
+     * 직선으로 이어 어깨가 다시 평평해진다. */
+    if (anchors._neckPins) {
+      for (var np = 0; np < anchors._neckPins.dst.length; np++) {
+        pt.dst.push(anchors._neckPins.dst[np]);
+        pt.src.push(anchors._neckPins.src[np]);
+      }
+    }
+    if (anchors._shMid && G.anchors.neckL && G.anchors.shL) {
+      var mt = anchors._shMid.t;
+      [['neckL', 'shL', 0], ['neckR', 'shR', 1]].forEach(function (q) {
+        var gn = G.anchors[q[0]], gs = G.anchors[q[1]];
+        if (!gn || !gs) return;
+        pt.dst.push(anchors._shMid.dst[q[2]]);
+        pt.src.push([gn[0] + (gs[0] - gn[0]) * mt, gn[1] + (gs[1] - gn[1]) * mt]);
+      });
+    }
     var gm = G.geom, cx = gm.cx, pitY = gm.armpitY, half = (gm.bodyHalf || 0) * 1.02;
     /* 잘라 읽는 경계는 **솔기에서 확실히 떨어뜨린다.**
      * 옷본의 겨드랑이 솔기는 어깨점에서 겨드랑이까지 비스듬히 내려오는
