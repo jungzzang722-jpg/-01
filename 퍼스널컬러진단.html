@@ -1039,6 +1039,25 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
 .margin-tight { box-shadow: 0 0 0 .5px var(--separator), inset 3px 0 0 var(--orange); }
 .margin-ok    { box-shadow: 0 0 0 .5px var(--separator), inset 3px 0 0 var(--blue); }
 .margin-wide  { box-shadow: 0 0 0 .5px var(--separator), inset 3px 0 0 var(--green); }
+
+/* 후보 범위 — 판정 여유보다 위에 오므로 조금 더 존재감을 준다 */
+.pool-box {
+  margin-top: 12px; padding: 13px 15px; border-radius: var(--r-box);
+  background: var(--fill-4);
+  box-shadow: 0 0 0 .5px var(--separator), inset 3px 0 0 var(--blue);
+}
+.pool-box > b { display: block; font-size: 13.5px; font-weight: 600; }
+.pool-box p { font-size: 12.5px; color: var(--label-2); margin: 7px 0 0; line-height: 1.6; }
+.pool-box .hint { margin-top: 6px; font-size: 11.5px; color: var(--label-3); }
+.pool-list { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; }
+.pool-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 11px 5px 8px; border-radius: 99px;
+  font-size: 12.5px; background: var(--fill-3);
+  box-shadow: 0 0 0 .5px var(--separator);
+}
+.pool-chip.lead { font-weight: 600; background: var(--fill-2); }
+.pool-chip i { width: 9px; height: 9px; border-radius: 99px; flex: 0 0 auto; }
 /* =========================================================================
  * 가상 피팅 (fitroom)
  * ========================================================================= */
@@ -1706,6 +1725,51 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     return Math.max(Math.abs(gains.r - 1), Math.abs(gains.g - 1), Math.abs(gains.b - 1));
   }
 
+  /**
+   * 공막의 표준 색도 — gainsFromNeutral 의 bias 와 같은 값이어야 한다.
+   * 흰자는 완전한 무채색이 아니라 아주 살짝 따뜻하다.
+   */
+  var SCLERA_CHROMA = { r: 1.000, g: 0.995, b: 0.978 };
+
+  /**
+   * lab 을 사진 안의 기준점에 상대적인 색으로 다시 잰다.
+   *
+   * 조명색 오차는 선형 RGB 의 대각 게인이다. 같은 사진 안에 있는 기준점의
+   * 색도를 알고 있으면, 그 기준점을 제 색으로 되돌리는 게인을 구해 피부에
+   * 그대로 적용하는 것으로 오차가 상쇄된다. 절대 Lab 을 그대로 쓰면
+   * 색온도 ±1000K 오차가 웜 축 임계폭 하나만큼 판정을 밀어버린다
+   * (build/test-tone.mjs · build/dbg-feat.mjs 실측: 피부 h° 표류 8.4°,
+   *  공막 기준 상대량으로 바꾸면 1.4°).
+   *
+   * 밝기는 건드리지 않는다. 기준점의 밝기는 개인차·노출차라서 L* 까지
+   * 끌려가면 밝기 축이 오염된다. 색도만 재기준한다.
+   *
+   * refChroma 를 생략하면 기준점을 완전 무채색으로 간주한다.
+   */
+  function relativeToNeutral(lab, refLab, refChroma) {
+    if (!lab || !refLab) return lab;
+    var rc = refChroma || { r: 1, g: 1, b: 1 };
+    var s = labToRgb(lab.L, lab.a, lab.b);
+    var r = labToRgb(refLab.L, refLab.a, refLab.b);
+    var sl = [srgbToLinear(s.r), srgbToLinear(s.g), srgbToLinear(s.b)];
+    var rl = [srgbToLinear(r.r), srgbToLinear(r.g), srgbToLinear(r.b)];
+    // 기준점이 너무 어두우면 색도를 못 믿는다 — 손대지 않는다
+    var rm = (rl[0] + rl[1] + rl[2]) / 3;
+    if (!(rm > 0.02)) return lab;
+    // 기준점을 제 색(refChroma)으로 되돌리는 게인
+    var want = [rc.r, rc.g, rc.b];
+    var wm = (want[0] + want[1] + want[2]) / 3;
+    var g = [0, 1, 2].map(function (i) {
+      return (want[i] / wm) * (rm / Math.max(rl[i], 1e-6));
+    });
+    var o = [sl[0] * g[0], sl[1] * g[1], sl[2] * g[2]];
+    // 원래 휘도를 유지해 밝기 축과 분리한다
+    var y0 = 0.2126729 * sl[0] + 0.7151522 * sl[1] + 0.0721750 * sl[2];
+    var y1 = 0.2126729 * o[0] + 0.7151522 * o[1] + 0.0721750 * o[2];
+    var k = y1 > 1e-9 ? y0 / y1 : 1;
+    return rgbToLab(linearToSrgb(o[0] * k), linearToSrgb(o[1] * k), linearToSrgb(o[2] * k));
+  }
+
   /* ---------- 로버스트 통계 : 잡티·그림자·정반사에 강해야 함 ---------- */
   function median(arr) {
     if (!arr.length) return 0;
@@ -1763,6 +1827,7 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     rgbToXyz: rgbToXyz, xyzToRgb: xyzToRgb, rgbToLab: rgbToLab, labToRgb: labToRgb,
     labToLch: labToLch, lchToLab: lchToLab, rgbToHsv: rgbToHsv, rgbToYcbcr: rgbToYcbcr,
     deltaE2000: deltaE2000, ita: ita, itaClass: itaClass, hueDist: hueDist,
+    relativeToNeutral: relativeToNeutral, SCLERA_CHROMA: SCLERA_CHROMA,
     gainsFromNeutral: gainsFromNeutral, shadesOfGrayGains: shadesOfGrayGains,
     applyGains: applyGains, castStrength: castStrength,
     median: median, trimmedMeanLab: trimmedMeanLab, stdev: stdev,
@@ -3250,6 +3315,23 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       };
     });
 
+    /* 5-1) 웜 축이 기댈 사진 내 기준점.
+     *
+     * 웜/쿨 판정을 절대 Lab 으로 하면 조명색 오차가 그대로 판정으로 흘러든다.
+     * 같은 사진 안의 기준점에 상대적으로 재면 그 오차가 상쇄된다.
+     * 화이트밸런스를 이미 공막으로 잡았다면 게인이 1에 가까워 아무 일도
+     * 일어나지 않고, 흰 면·전역 추정으로 잡은 경우에만 실제로 교정이 된다.
+     *
+     * 클리핑된 공막은 쓰지 않는다. 날아간 채널은 되살릴 수 없어서
+     * 기준점으로 삼으면 오히려 틀린 방향으로 끌고 간다. */
+    var neutral = null;
+    if (scleraUsable && corrected.sclera) {
+      neutral = { lab: corrected.sclera.lab, chroma: CC.SCLERA_CHROMA, src: 'sclera' };
+    } else if (gray) {
+      var gc = CC.applyGains(gray.rgb, gains);
+      neutral = { lab: CC.rgbToLab(gc.r, gc.g, gc.b), chroma: null, src: 'gray_surface' };
+    }
+
     /* 6) 통합 피부색 — 22개 지점의 반복 이상치 제거 후 가중 결합 */
     var skinAgg = robustSkin(corrected, frame.yaw);
     if (!skinAgg) {
@@ -3331,6 +3413,7 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       hair: corrected.hair ? corrected.hair.lab : null,
       sclera: corrected.sclera ? corrected.sclera.lab : null,
       lip: corrected.lip ? corrected.lip.lab : null,
+      neutral: neutral,
       wb: { gains: totalGains, residualGains: gains, preGains: g0, method: wbMethod, cast: cast, preCast: preCast, clip: clip, graySurface: !!gray },
       quality: {
         faceRatio: faceRatio, blurVar: blurVar,
@@ -3492,6 +3575,14 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       iris: medLab(function (r) { return r.iris; }),
       hair: medLab(function (r) { return r.hair; }),
       lip: medLab(function (r) { return r.lip; }),
+      // 기준점도 중앙값으로 — 피부는 여러 프레임의 중앙값인데 기준점만
+      // 한 프레임에서 오면 둘이 다른 조명을 가리키게 된다.
+      neutral: (function () {
+        var lab = medLab(function (r) { return r.neutral ? r.neutral.lab : null; });
+        if (!lab) return null;
+        var src = (keep.find(function (r) { return r.neutral; }) || {}).neutral;
+        return { lab: lab, chroma: src.chroma, src: src.src };
+      })(),
       frameCount: keep.length,
       totalFrames: results.length,
       // 재현성 측정을 위해 프레임별 결과를 그대로 넘긴다.
@@ -4086,34 +4177,58 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     var itaC = CC.itaClass(itaV);
 
     /* ---------- 축 1. WARM ↔ COOL ---------- */
-    // 주 지표는 피부의 색상각. 노란기가 강할수록 h°가 커진다.
+    /* 이 축은 사진 안의 기준점에 **상대적으로** 잰다.
+     *
+     * 절대 Lab 으로 재면 조명색 오차가 그대로 판정이 된다. 실측(build/
+     * test-tone.mjs)에서 색온도 ±1000K 오차는 피부 색상각을 8.4° 밀었는데,
+     * 이 항의 임계폭이 8.0° 다. 오차 하나가 임계 하나를 통째로 먹는다.
+     * 눈으로는 구분도 안 되는 ±200K 에서 이미 계절 판정이 절반쯤 뒤집혔다.
+     *
+     * 공막을 기준점으로 삼으면 조명 게인이 대각행렬이라 그 오차가 상쇄된다
+     * (dbg-feat.mjs 실측: 표류 8.4° → 1.4°). 화이트밸런스를 이미 공막으로
+     * 잡은 사진에서는 게인이 1이라 값이 그대로고, 흰 면·전역 추정으로 잡은
+     * 사진에서만 실제로 교정이 걸린다. 즉 좋은 사진은 손대지 않고
+     * 나쁜 사진만 구한다.
+     *
+     * 밝기 축과 맑기 축은 L* 기반이라 조명색에 거의 흔들리지 않는다
+     * (표류 0.4, 0.25). 상대화가 필요한 곳은 여기뿐이다. */
+    var nref = f.neutral && f.neutral.lab ? f.neutral : null;
+    var wSkin = nref ? CC.relativeToNeutral(skin, nref.lab, nref.chroma) : skin;
+    var wsL = CC.labToLch(wSkin.L, wSkin.a, wSkin.b);
+
     var wTerms = [];
-    wTerms.push({ v: sq(sL.h, 57, 8.0), w: 0.34, name: '피부 색상각' });
-    wTerms.push({ v: sq(skin.b, 16.5, 5.5), w: 0.18, name: '피부 노란기(b*)' });
-    wTerms.push({ v: sq(skin.b / Math.max(skin.a, 1), 1.65, 0.55), w: 0.20, name: '황/적 비율' });
+    wTerms.push({ v: sq(wsL.h, 57, 8.0), w: 0.34, name: '피부 색상각' });
+    wTerms.push({ v: sq(wSkin.b, 16.5, 5.5), w: 0.18, name: '피부 노란기(b*)' });
+    wTerms.push({ v: sq(wSkin.b / Math.max(wSkin.a, 1), 1.65, 0.55), w: 0.20, name: '황/적 비율' });
 
     if (hair && !opts.hairDyed) {
-      var hL = CC.labToLch(hair.L, hair.a, hair.b);
+      // 모발도 같은 기준점으로 옮겨야 피부와 같은 좌표계에서 비교된다
+      var wHair = nref ? CC.relativeToNeutral(hair, nref.lab, nref.chroma) : hair;
+      var hL = CC.labToLch(wHair.L, wHair.a, wHair.b);
       // 모발 채도가 너무 낮으면(거의 무채색) 색상각이 불안정 → 가중치 축소
       var hairW = clamp(hL.C / 12, 0, 1) * 0.16;
       if (hairW > 0.02) wTerms.push({ v: sq(hL.h, 56, 11), w: hairW, name: '모발 색상' });
     }
     if (lip && !opts.wearingMakeup) {
-      var pL = CC.labToLch(lip.L, lip.a, lip.b);
+      var wLip = nref ? CC.relativeToNeutral(lip, nref.lab, nref.chroma) : lip;
+      var pL = CC.labToLch(wLip.L, wLip.a, wLip.b);
       if (pL.C > 8) wTerms.push({ v: sq(pL.h, 23, 9), w: 0.12, name: '입술 색상' });
     }
     var warm = weighted(wTerms);
 
     ev.push({
       axis: 'warm',
-      text: '피부 색상각이 ' + sL.h.toFixed(1) + '° 입니다. ' +
-        (sL.h >= 57 ? '기준(57°)보다 노란기가 우세해 웜 방향입니다.'
-          : '기준(57°)보다 붉은기가 우세해 쿨 방향입니다.')
+      text: '피부 색상각이 ' + wsL.h.toFixed(1) + '° 입니다. ' +
+        (wsL.h >= 57 ? '기준(57°)보다 노란기가 우세해 웜 방향입니다.'
+          : '기준(57°)보다 붉은기가 우세해 쿨 방향입니다.') +
+        (nref
+          ? ' (' + (nref.src === 'sclera' ? '눈 흰자' : '흰 면') + '를 기준점으로 삼아 조명색을 상쇄한 값입니다.)'
+          : ' (사진 안에 기준점이 없어 절대값으로 쟀습니다. 조명색이 그대로 섞여 있을 수 있습니다.)')
     });
     ev.push({
       axis: 'warm',
-      text: '피부 b*(노랑-파랑) 값 ' + skin.b.toFixed(1) + ', a*(빨강-초록) 값 ' + skin.a.toFixed(1) +
-        ' → 황/적 비율 ' + (skin.b / Math.max(skin.a, 1)).toFixed(2) + '.'
+      text: '피부 b*(노랑-파랑) 값 ' + wSkin.b.toFixed(1) + ', a*(빨강-초록) 값 ' + wSkin.a.toFixed(1) +
+        ' → 황/적 비율 ' + (wSkin.b / Math.max(wSkin.a, 1)).toFixed(2) + '.'
     });
 
     /* ---------- 축 2. LIGHT ↔ DEEP ---------- */
@@ -4165,7 +4280,11 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     return {
       warm: clamp(warm, -1, 1), light: clamp(light, -1, 1), bright: clamp(bright, -1, 1),
       metrics: {
-        skinL: skin.L, skinA: skin.a, skinB: skin.b, skinC: sL.C, skinH: sL.h,
+        // skinH/skinB 는 웜 축이 실제로 쓴 값(기준점 상대) 이다.
+        // 절대값은 skinHAbs/skinBAbs 로 따로 남긴다 — 둘이 벌어진 정도가
+        // 곧 이 사진에 남아 있던 조명색 오차의 크기다.
+        skinL: skin.L, skinA: wSkin.a, skinB: wSkin.b, skinC: sL.C, skinH: wsL.h,
+        skinHAbs: sL.h, skinBAbs: skin.b, neutralSrc: nref ? nref.src : null,
         ita: itaV, itaClass: itaC,
         hairL: hair ? hair.L : null, irisL: iris ? iris.L : null,
         contrast: contrast, contrastHair: contrastHair, contrastEye: contrastEye
@@ -4490,6 +4609,10 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     return {
       skin: mv(f.skin), hair: mv(f.hair), iris: mv(f.iris),
       lip: mv(f.lip), sclera: f.sclera,
+      // 기준점은 흔들지 않는다. 여기서 재는 것은 "피부색을 이만큼 잘못
+      // 읽었다면" 이지 "기준점이 움직였다면"이 아니다. 그리고 이걸 빠뜨리면
+      // 웜 축이 절대값 계산으로 되돌아가 마진이 다른 축을 재게 된다.
+      neutral: f.neutral, quality: f.quality,
       contrast: f.contrast, varL: f.varL, varB: f.varB
     };
   }
@@ -4509,6 +4632,93 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       var n = Math.hypot(v[0], v[1], v[2]) || 1;
       return { L: v[0] / n, a: v[1] / n, b: v[2] / n };
     });
+  }
+
+  /**
+   * 이 사진의 색 측정 불확실성 (ΔE 단위).
+   *
+   * 실측으로 얻은 값들이다 (build/test-tone.mjs, dbg-invariance.mjs).
+   *   · 공막 기준점 + 상대화 : 잔차 ΔE 0.4~1.5
+   *   · 흰 면 기준           : 그보다 크고 면의 진짜 색을 모른다
+   *   · 기준점 없음(전역 추정) : ΔE 3~7
+   * 여기에 보정 후에도 남은 색캐스트와 채널 클리핑을 더한다. 둘 다
+   * "보정이 실패했다"는 직접 증거다.
+   */
+  function colorUncertainty(f, opts) {
+    var wb = f.wb || {};
+    var e = wb.method === 'manual' ? 0.8
+      : (f.neutral && f.neutral.src === 'sclera') ? 1.2
+        : (f.neutral && f.neutral.src === 'gray_surface') ? 2.2
+          : 3.5;
+    e += Math.min(3.0, Math.max(0, (wb.cast || 0) - 0.10) * 12);
+    e += Math.min(2.0, ((wb.clip && wb.clip.imbalance) || 0) * 10);
+    if (f.quality && f.quality.skinVarL > 9) e += 0.6;
+
+    /* 여러 장을 찍었다면 관측된 흔들림이 있다. 모델이 추정한 값보다
+     * 실제로 본 값이 언제나 낫다 — 다만 같은 조명에서 찍은 프레임들은
+     * 사이좋게 같이 틀리므로, 관측값은 하한으로만 쓰고 모델값을 덮지 않는다. */
+    var rp = opts && opts.reproducibility;
+    if (rp && rp.spread) {
+      var obs = (rp.spread.warm + rp.spread.light + rp.spread.bright) / 3 * 8;
+      e = Math.max(e, obs);
+    }
+    return CC.clamp(e, 0.5, 7);
+  }
+
+  /**
+   * 이 사진이 실제로 구분해 낼 수 있는 타입의 집합.
+   *
+   * 판정 경계는 촘촘하다 — 현실적인 얼굴 격자 729개 중 47%가 계절 경계까지
+   * ΔE 1.5 이내, 84%가 3.5 이내다(build/dbg-boundary.mjs). 그런데 사진에서
+   * 얻을 수 있는 색 정확도는 가장 좋을 때도 ΔE 1 안팎이다. 그러면 "당신은
+   * 겨울 딥입니다"는 대부분의 경우 데이터가 지지하지 않는 주장이 된다.
+   *
+   * 그래서 측정 불확실성만큼 피부색을 흔들어 실제로 어떤 타입들이 나오는지
+   * 센다. 하나만 나오면 그건 사진이 지지하는 답이고, 여럿이면 그 여럿이
+   * 이 사진이 말할 수 있는 전부다. 결과를 넓히는 게 아니라, 원래 그만큼
+   * 밖에 좁혀지지 않는다는 사실을 드러내는 것이다.
+   */
+  function candidatePool(features, opts) {
+    if (!features || !features.skin) return null;
+    var sigma = colorUncertainty(features, opts);
+    var dirs = marginDirs();
+    var counts = {}, order = [], total = 0;
+
+    function tally(f) {
+      var t = diagnose(f, opts).type;
+      if (!counts[t.key]) { counts[t.key] = { type: t, n: 0 }; order.push(t.key); }
+      counts[t.key].n++; total++;
+    }
+    tally(features);
+    dirs.forEach(function (u) {
+      /* Lab 이동량은 ΔE2000 이 아니다. 방향마다 환산비가 달라서
+       * 그냥 sigma 를 곱하면 어떤 방향은 과하게, 어떤 방향은 모자라게 흔든다.
+       * 단위 이동의 실제 ΔE 로 나눠 방향별로 맞춘다. */
+      var probe = { L: features.skin.L + u.L, a: features.skin.a + u.a, b: features.skin.b + u.b };
+      var per = CC.deltaE2000(features.skin, probe) || 1;
+      var r = sigma / per;
+      [0.5, 1.0].forEach(function (k) {
+        tally(shiftFeat(features, { L: u.L * r * k, a: u.a * r * k, b: u.b * r * k }));
+      });
+    });
+
+    var list = order.map(function (k) {
+      return { type: counts[k].type, share: counts[k].n / total };
+    }).sort(function (a, b) { return b.share - a.share; });
+
+    // 한 번 스쳐 나온 타입까지 후보라고 부르면 아무 말도 안 하는 것과 같다
+    var pool = list.filter(function (x) { return x.share >= 0.12; });
+    if (!pool.length) pool = list.slice(0, 1);
+
+    var seasons = {};
+    pool.forEach(function (x) { seasons[x.type.season] = (seasons[x.type.season] || 0) + x.share; });
+
+    return {
+      sigma: sigma, all: list, pool: pool, n: total,
+      settled: pool.length === 1,
+      seasonSettled: Object.keys(seasons).length === 1,
+      seasons: seasons
+    };
   }
 
   function decisionMargin(features, opts) {
@@ -4666,7 +4876,8 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     computeAxes: computeAxes, classify: classify, diagnose: diagnose,
     harmony: harmony, drape: drape, drapeType: drapeType, warmthOfColor: warmthOfColor,
     rankColors: rankColors, grade: grade, DRAPE_CRITERIA: DRAPE_CRITERIA,
-    reproducibility: reproducibility, decisionMargin: decisionMargin
+    reproducibility: reproducibility, decisionMargin: decisionMargin,
+    candidatePool: candidatePool, colorUncertainty: colorUncertainty
   };
 })(window);
 </script>
@@ -9971,14 +10182,63 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
   function colorStrategy(dx) {
     var t = dx.type, person = dx.person;
 
+    /* 후보 색은 이 사진이 배제하지 못한 타입 전부에서 모은다.
+     *
+     * 채점기(harmony·drape)는 이미 타입이 아니라 **사람**을 기준으로 매긴다.
+     * 브리틀한 곳은 단 한 군데, "라벨로 후보 목록을 먼저 잘라내는" 단계다.
+     * 실측(build/dbg-palette.mjs): 경계에서 뒤집히는 175명에 대해 1순위와
+     * 2순위 팔레트의 색 자체는 확실히 다른데(평균 최근접 ΔE 15.6), 본인
+     * 기준 점수 차는 평균 0.046 — 등급 한 칸(0.10)도 안 된다. 게다가 20%는
+     * 2순위 팔레트가 오히려 더 잘 맞았다. 즉 라벨로 자르는 순간 그 사람에게
+     * 더 좋은 색을 다섯 중 하나꼴로 버리고 있었다.
+     *
+     * 그래서 후보를 합치고 사람 기준으로 다시 줄 세운다. 라벨이 뒤집혀도
+     * 추천 색은 거의 그대로가 되고, 판정이 확정된 사람에게는 아무 변화가 없다
+     * (풀이 한 개면 원래 동작과 같다). */
+    var pool = (dx.pool && dx.pool.pool && dx.pool.pool.length > 1)
+      ? dx.pool.pool.map(function (x) { return x.type; })
+      : [t];
+
+    function gather(field) {
+      var seen = {}, out = [];
+      pool.forEach(function (ty) {
+        (ty[field] || []).forEach(function (c) {
+          if (seen[c.hex]) return;
+          seen[c.hex] = 1; out.push(c);
+        });
+      });
+      return out;
+    }
+    var bestPool = gather('best'), neutralPool = gather('neutrals');
+    /* 피해야 할 색은 합치지 않고 **교집합**으로 간다. 어느 후보에서는 금지고
+     * 다른 후보에서는 추천인 색을 "피하세요"라고 말할 근거가 없다. */
+    var worstPool = (function () {
+      var cnt = {}, byHex = {};
+      pool.forEach(function (ty) {
+        var seen = {};
+        (ty.worst || []).forEach(function (c) {
+          if (seen[c.hex]) return;
+          seen[c.hex] = 1;
+          cnt[c.hex] = (cnt[c.hex] || 0) + 1; byHex[c.hex] = c;
+        });
+      });
+      var all = Object.keys(cnt).filter(function (h) { return cnt[h] === pool.length; });
+      // 교집합이 비면 최다 득표로 물러선다 — 경고를 통째로 잃는 것보다 낫다
+      if (!all.length) {
+        var mx = Math.max.apply(null, Object.keys(cnt).map(function (h) { return cnt[h]; }));
+        all = Object.keys(cnt).filter(function (h) { return cnt[h] === mx; });
+      }
+      return all.map(function (h) { return byHex[h]; });
+    })();
+
     // 얼굴 근접 아이템 기준으로 베스트 컬러 재순위화
-    var nearFace = DIAGNOSE.rankColors(t.best, person, true);
-    var far = DIAGNOSE.rankColors(t.best.concat(t.neutrals), person, false);
-    var avoid = DIAGNOSE.rankColors(t.worst, person, true).reverse();
+    var nearFace = DIAGNOSE.rankColors(bestPool, person, true);
+    var far = DIAGNOSE.rankColors(bestPool.concat(neutralPool), person, false);
+    var avoid = DIAGNOSE.rankColors(worstPool, person, true).reverse();
 
     return {
       hero: nearFace.slice(0, 5),              // 얼굴 옆에 두면 가장 좋은 색
-      base: DIAGNOSE.rankColors(t.neutrals, person, false),  // 베이직 아이템 기본색
+      base: DIAGNOSE.rankColors(neutralPool, person, false),  // 베이직 아이템 기본색
       accent: nearFace.slice(0, 10).filter(function (c) {
         return c.harmony.lch.C > 30;
       }).slice(0, 4),                          // 포인트용 고채도
@@ -12304,6 +12564,38 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       '아래 <b>직접 대보기</b>에서 눈으로 확인한 결과를 최종 기준으로 삼으세요.' +
       '</div>';
 
+    /* 이 사진이 구분해 낸 범위 — 판정 여유보다 먼저 온다.
+     *
+     * 여유(ΔE)는 해석이 필요한 숫자지만, "후보가 둘"은 그 자체로 답이다.
+     * 실측(build/test-tone.mjs): ±2000K 범위에서 라벨 하나만 내밀면 52%가
+     * 뒤집혔는데, 후보 풀로 답하면 모순이 48회 중 1회였다. 평균 후보 수는
+     * 1.94개. 답이 넓어진 게 아니라, 원래 이만큼밖에 좁혀지지 않는다. */
+    if (dx.pool && !dx.pool.settled) {
+      var pk = dx.pool.pool;
+      h += '<div class="pool-box">' +
+        '<b>이 사진으로는 ' + pk.length + '개까지 좁혀집니다</b>' +
+        '<div class="pool-list">' +
+        pk.map(function (x, i) {
+          return '<span class="pool-chip' + (i === 0 ? ' lead' : '') + '">' +
+            '<i style="background:' + PALETTES.SEASON_INFO[x.type.season].color + '"></i>' +
+            esc(x.type.ko) + '</span>';
+        }).join('') + '</div>' +
+        '<p>' + (dx.pool.seasonSettled
+          ? '계절은 <b>' + esc(PALETTES.SEASON_INFO[pk[0].type.season].ko) +
+            '</b>으로 확정되고, 그 안에서 갈립니다. 아래 추천 색은 이 후보 전체에서 모아 ' +
+            '<b>당신 얼굴 기준으로</b> 다시 줄 세운 것이라, 어느 쪽이 맞든 그대로 쓰실 수 있습니다.'
+          : '계절까지 갈립니다. 아래 추천 색은 이 후보 전체에서 모아 <b>당신 얼굴 기준으로</b> ' +
+            '다시 줄 세운 것이라, 어느 쪽이 맞든 안전한 색이 위로 옵니다.') + '</p>' +
+        '<p class="hint">사진에서 얻을 수 있는 색 정확도는 가장 좋은 조건에서도 ΔE 1 안팎인데, ' +
+        '12타입의 판정 경계는 그보다 촘촘합니다(현실적인 얼굴의 47%가 경계까지 ΔE 1.5 이내). ' +
+        '하나만 골라 말하면 그건 측정이 아니라 반올림입니다. ' +
+        (dx.pool.sigma > 2
+          ? '<b>이 사진의 색 불확실성은 ΔE ' + dx.pool.sigma.toFixed(1) +
+            '로 큰 편입니다 — 흰 종이를 함께 찍으면 후보가 줄어듭니다.</b>'
+          : '이 사진의 색 불확실성은 ΔE ' + dx.pool.sigma.toFixed(1) + ' 입니다.') +
+        '</p></div>';
+    }
+
     /* 판정 여유 — 정답을 몰라도 잴 수 있는 값이라 따로 설명을 붙인다 */
     if (dx.margin) {
       h += '<div class="margin-box margin-' + dx.margin.level + '">' +
@@ -14416,6 +14708,13 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       hair: corrected.hair ? corrected.hair.lab : null,
       sclera: corrected.sclera ? corrected.sclera.lab : null,
       lip: corrected.lip ? corrected.lip.lab : null,
+      // 핸들을 옮기면 공막 위치도 바뀐다. 웜 축이 이 기준점에 상대적으로
+      // 계산되므로 여기서도 반드시 다시 잡아야 한다. 안 그러면 최초 분석
+      // 때의 기준점이 그대로 남아 핸들 조정이 색에 반영되지 않는다.
+      neutral: (sclera && corrected.sclera
+        && Math.max(sclera.rgb.r, sclera.rgb.g, sclera.rgb.b) <= 249)
+        ? { lab: corrected.sclera.lab, chroma: CC.SCLERA_CHROMA, src: 'sclera' }
+        : null,
       samples: corrected, skinAgg: agg, frame: fr,
       wb: {
         gains: totalG, residualGains: gains, preGains: pg, method: method,
@@ -14462,6 +14761,9 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     b.dx = DIAGNOSE.diagnose(b.feat, dxOpts);
     // 결정 여유 — 정답 라벨 없이도 잴 수 있는 안정성. 30ms 안팎이라 즉시 계산한다.
     b.dx.margin = DIAGNOSE.decisionMargin(b.feat, dxOpts);
+    /* 이 사진이 실제로 구분해 낸 타입들. 추천 색을 여기서 모으므로
+     * 반드시 colorStrategy 보다 먼저 있어야 한다. */
+    b.dx.pool = DIAGNOSE.candidatePool(b.feat, dxOpts);
     drawBust(b);
     renderSampleList(b);
     $('#bustIssues').innerHTML = issuesHtml(b.feat.issues);
