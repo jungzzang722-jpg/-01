@@ -884,6 +884,10 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
 .cap-badge.warn { background: var(--orange); }
 .cap-badge.bad  { background: var(--red); }
 
+/* 쓸 수 없는 토글은 "안 켠 것"이 아니라 "못 켜는 것"으로 보여야 한다 */
+.cap-toggle.off { opacity: .5; }
+.cap-toggle.off input { cursor: not-allowed; }
+
 /* 화면 플래시 — 촬영 순간 화면 전체를 흰색으로 덮는다.
    기기 밝기까지는 웹에서 못 올리므로 안내로 대신한다. */
 .cap-flashscreen {
@@ -3995,6 +3999,7 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
         state.flashBlocked = !(lk.wb && lk.expo);
         if (state.flashBlocked) {
           box.checked = false; box.disabled = true;
+          if (box.parentNode) box.parentNode.classList.add('off');
           if (hint) {
             hint.innerHTML = '이 기기는 카메라의 노출·화이트밸런스를 고정할 수 없어 ' +
               '화면 플래시 보정을 쓸 수 없습니다. 두 장 사이에 카메라가 색을 바꾸면 ' +
