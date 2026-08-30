@@ -8152,6 +8152,24 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
 
   var clamp = CC.clamp;
 
+  /**
+   * 밝은 쪽 어깨 — 255 에 부딪히지 않고 눕는다.
+   *
+   * 사진의 빛을 옷에 이식할 때 조명장은 최대 1.42배까지 곱한다. 어두운 옷은
+   * 여유가 있지만 밝은 옷은 이미 RGB 220 근처라 그대로 곱하면 255 에 붙는다.
+   * 실측: 밝은 리넨의 11.5%, 크림 니트의 6.0% 가 날아갔다(중간 색은 0.0%).
+   * 날아간 자리는 계조가 통째로 사라져 종이를 오려 붙인 것처럼 보이고,
+   * 조명장의 좌우 기울기를 따라 세로 줄무늬로 드러났다.
+   *
+   * 필름의 하이라이트 어깨와 같은 처리다. 단조증가라 밝기 순서는 지켜지고,
+   * 잘리는 대신 눕기 때문에 주름과 결이 남는다.
+   */
+  function shoulder(v) {
+    var K = 216;
+    if (v <= K) return v < 0 ? 0 : v;
+    return K + (255 - K) * (1 - Math.exp(-(v - K) / (255 - K)));
+  }
+
   /* =======================================================================
    * 1. Thin-Plate Spline
    *
@@ -8570,14 +8588,79 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       lmSource += '(전경 비율 이상)';
     }
 
-    /* 조명장 — 사진의 빛이 어느 쪽에서 오는가 */
+    /* 조명장 — 사진의 빛이 어느 쪽에서 오는가
+     *
+     * 휘도를 그냥 흐리면 **반사율의 단차가 조명으로 둔갑한다.** 맨다리는
+     * 밝고 어두운 반바지는 어두우니, 그 경계가 완만한 밝기 기울기로 남아
+     * 새 옷에 그대로 찍힌다. 실제로 밝은 리넨 바지의 밑단이 하얗게 떠올랐고,
+     * 원래 입고 있던 옷의 경계가 세로 줄무늬로 드러났다.
+     *
+     * 빛은 완만하게 변하고 반사율은 단차를 만든다 — 그 차이를 이용한다.
+     * 픽셀을 반사율이 비슷한 몇 무리로 갈라 각자의 중앙값으로 나누면,
+     * 남는 것은 그 무리 안에서의 밝기 변화, 곧 조명이다. 무리는 피부/옷으로
+     * 먼저 가르고(가장 큰 단차), 옷은 다시 밝고 어두움으로 나눈다.
+     * 옷 두 벌의 밝기가 다른 흔한 경우가 여기서 잡힌다. */
     var d = img.data;
     var lum = new Float32Array(w * h);
     for (var p = 0, i = 0; p < w * h; p++, i += 4) {
       lum[p] = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
     }
+
+    var skinL = [], clothL = [];
+    for (var q = 0; q < w * h; q++) {
+      if (!mask[q]) continue;
+      (skin[q] ? skinL : clothL).push(lum[q]);
+    }
+    function med(a) {
+      if (!a.length) return 0;
+      var b2 = a.slice().sort(function (x, y) { return x - y; });
+      return b2[b2.length >> 1];
+    }
+    var mSkin = med(skinL);
+    // 옷은 밝기로 한 번 더 가른다 (위아래 색이 다른 것이 보통이다)
+    var cut = clothL.length > 200 ? med(clothL) : 0;
+    var loArr = [], hiArr = [];
+    for (var q2 = 0; q2 < clothL.length; q2++) {
+      (clothL[q2] <= cut ? loArr : hiArr).push(clothL[q2]);
+    }
+    var mLo = med(loArr), mHi = med(hiArr);
+    // 두 무리가 사실상 같은 밝기면 나누지 않는다 (한 벌만 입은 경우)
+    if (mHi - mLo < 14) { mLo = mHi = med(clothL); }
+
+    var ratio = new Float32Array(w * h);
+    var rSum = 0, rN = 0;
+    for (var q3 = 0; q3 < w * h; q3++) {
+      var base;
+      if (!mask[q3]) base = 0;
+      else if (skin[q3]) base = mSkin;
+      else base = lum[q3] <= cut ? mLo : mHi;
+      // 배경이나 기준을 못 구한 곳은 1(중립)로 둔다 — 흐릴 때 이웃에 섞인다
+      var rv = base > 8 ? lum[q3] / base : 1;
+      // 무리 안에서도 지나치게 벗어난 값은 조명이 아니라 무늬다
+      ratio[q3] = clamp(rv, 0.45, 1.75);
+      if (mask[q3]) { rSum += ratio[q3]; rN++; }
+    }
+    /* 흐리기는 **인물 안에서만** 한다.
+     * 배경까지 섞으면 몸 가장자리가 배경값 쪽으로 끌려가 조명장이 통째로
+     * 평평해진다 — 실측에서 0.87~1.03 까지 눌려, 사진의 빛을 옷에 옮긴다는
+     * 이 기능의 목적 자체가 사라졌다. 가중 평균으로 마스크 안만 센다. */
     var lr = Math.max(6, Math.round(Math.min(w, h) * 0.06));
-    var light = boxBlur(lum, w, h, lr, 3);
+    var rm = new Float32Array(w * h), mf = new Float32Array(w * h);
+    for (var q6 = 0; q6 < w * h; q6++) {
+      mf[q6] = mask[q6] ? 1 : 0;
+      rm[q6] = mask[q6] ? ratio[q6] : 0;
+    }
+    var num = boxBlur(rm, w, h, lr, 3), den = boxBlur(mf, w, h, lr, 3);
+    var rBlur = new Float32Array(w * h);
+    for (var q7 = 0; q7 < w * h; q7++) rBlur[q7] = den[q7] > 0.02 ? num[q7] / den[q7] : 1;
+    /* 이후 코드는 light 를 휘도처럼 쓰므로(평균으로 나눠 비율을 얻는다)
+     * 스케일을 되돌려 놓는다. */
+    var rMean = rN ? rSum / rN : 1;
+    var lumMean = 0, lumN = 0;
+    for (var q4 = 0; q4 < w * h; q4++) if (mask[q4]) { lumMean += lum[q4]; lumN++; }
+    lumMean = lumN ? lumMean / lumN : 128;
+    var light = new Float32Array(w * h);
+    for (var q5 = 0; q5 < w * h; q5++) light[q5] = rBlur[q5] / (rMean || 1) * lumMean;
 
     /* 피부색 기준 — 드러난 부분을 메울 때 쓴다 */
     var skinLab = sampleSkin(d, skin, mask, w, h, lm);
@@ -10269,9 +10352,9 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
           /* 사진의 빛을 옷에 이식한다 */
           var lf = clamp(1 + (body.light[p] / lmean - 1) * lightAmt, 0.62, 1.42);
           var i2 = p * 4;
-          od[i2]     = od[i2]     * (1 - a) + clamp(s4[0] * lf, 0, 255) * a;
-          od[i2 + 1] = od[i2 + 1] * (1 - a) + clamp(s4[1] * lf, 0, 255) * a;
-          od[i2 + 2] = od[i2 + 2] * (1 - a) + clamp(s4[2] * lf, 0, 255) * a;
+          od[i2]     = od[i2]     * (1 - a) + shoulder(s4[0] * lf) * a;
+          od[i2 + 1] = od[i2 + 1] * (1 - a) + shoulder(s4[1] * lf) * a;
+          od[i2 + 2] = od[i2 + 2] * (1 - a) + shoulder(s4[2] * lf) * a;
           if (a > 0.55) { covered[p] = 1; done[p] = 1; nPix++; }
         }
       }
