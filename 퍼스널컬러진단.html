@@ -4173,8 +4173,6 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     var ev = [];                      // 근거 문장
     var skin = f.skin, hair = f.hair, iris = f.iris, sclera = f.sclera, lip = f.lip;
     var sL = CC.labToLch(skin.L, skin.a, skin.b);
-    var itaV = CC.ita(skin);
-    var itaC = CC.itaClass(itaV);
 
     /* ---------- 축 1. WARM ↔ COOL ---------- */
     /* 이 축은 사진 안의 기준점에 **상대적으로** 잰다.
@@ -4215,6 +4213,19 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       if (pL.C > 8) wTerms.push({ v: sq(pL.h, 23, 9), w: 0.12, name: '입술 색상' });
     }
     var warm = weighted(wTerms);
+
+    /* ITA° 와 피부 채도도 같은 기준점 위에서 잰다.
+     *
+     * ITA° = atan((L*-50)/b*) 는 b* 를 품고 있어 조명색에 끌려간다
+     * (표류 11.0° / 임계폭 18). 원래 ITA° 는 표준 조명 아래에서 재도록
+     * 정의된 피부과 지표이므로, 보정된 값을 먹이는 쪽이 규격에 더 맞다.
+     * L* 은 상대화가 건드리지 않으므로 밝기 성분은 그대로다.
+     *
+     * 피부 채도 C* = hypot(a*,b*) 는 더 심하다 — 표류 10.2 / 임계폭 6.
+     * 맑기 축의 25% 를 차지하는 항이라 그냥 둘 수 없다. */
+    var itaV = CC.ita(wSkin);
+    var itaC = CC.itaClass(itaV);
+    var wsC = Math.hypot(wSkin.a, wSkin.b);
 
     ev.push({
       axis: 'warm',
@@ -4257,7 +4268,7 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
 
     var bTerms = [
       { v: sq(contrast, 34, 14), w: 0.45, name: '명도 대비' },
-      { v: sq(sL.C, 20, 6), w: 0.25, name: '피부 채도' }
+      { v: sq(wsC, 20, 6), w: 0.25, name: '피부 채도' }
     ];
     // 피부 붉은기 편차가 크면(홍조/잡티) 탁한 인상 → 뮤트 방향
     if (f.quality && f.quality.skinVarL != null) {
@@ -4275,7 +4286,7 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
         (contrast >= 34 ? ' → 대비가 높은 편이라 선명한 색을 소화합니다.'
           : ' → 대비가 낮은 편이라 강한 색에 얼굴이 눌릴 수 있습니다.')
     });
-    ev.push({ axis: 'bright', text: '피부 채도 C* ' + sL.C.toFixed(1) + '.' });
+    ev.push({ axis: 'bright', text: '피부 채도 C* ' + wsC.toFixed(1) + '.' });
 
     return {
       warm: clamp(warm, -1, 1), light: clamp(light, -1, 1), bright: clamp(bright, -1, 1),
@@ -4283,7 +4294,7 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
         // skinH/skinB 는 웜 축이 실제로 쓴 값(기준점 상대) 이다.
         // 절대값은 skinHAbs/skinBAbs 로 따로 남긴다 — 둘이 벌어진 정도가
         // 곧 이 사진에 남아 있던 조명색 오차의 크기다.
-        skinL: skin.L, skinA: wSkin.a, skinB: wSkin.b, skinC: sL.C, skinH: wsL.h,
+        skinL: skin.L, skinA: wSkin.a, skinB: wSkin.b, skinC: wsC, skinH: wsL.h,
         skinHAbs: sL.h, skinBAbs: skin.b, neutralSrc: nref ? nref.src : null,
         ita: itaV, itaClass: itaC,
         hairL: hair ? hair.L : null, irisL: iris ? iris.L : null,
