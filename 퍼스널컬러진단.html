@@ -7070,21 +7070,76 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     var w = work.w, h = work.h, ctx = work.ctx;
     var img = ctx.getImageData(0, 0, w, h), d = img.data;
 
-    /* 테두리에서 배경색 학습 */
+    /* 테두리에서 배경색 학습.
+     *
+     * 여기서 **옷이 배경으로 학습되면 옷이 통째로 지워진다.** 상품컷은 옷을
+     * 화면에 꽉 채우므로 소매 끝이 테두리에 닿는 일이 흔하다. 실측에서
+     * 회색 후드는 소매가 좌우 가장자리에 닿아 그 회색이 배경 군집으로
+     * 학습됐고, 같은 회색인 몸통 전체가 배경 판정을 받아 사라졌다
+     * (전경비 0.51 → 0.25, 형태 측정 실패). 진한 데님은 배경 군집과
+     * 멀어서 살아남았다 — 밝은 옷만 조용히 무너지는 종류의 버그다.
+     *
+     * 두 가지로 막는다.
+     *  1) 모서리를 무겁게 센다. 옷은 테두리 가운데로 삐져나오지 네 모서리
+     *     까지 닿는 경우는 드물다.
+     *  2) 테두리의 20% 미만을 차지하는 군집은 배경으로 인정하지 않는다.
+     *     배경이라면 테두리의 대부분이어야 한다. */
     var bg = [], band = Math.max(2, Math.round(Math.min(w, h) * 0.02));
+    var corner = Math.max(band, Math.round(Math.min(w, h) * 0.08));
+    function pushAt(px, py, times) {
+      var lab = labAt(d, (py * w + px) * 4);
+      for (var t = 0; t < times; t++) bg.push(lab);
+    }
     for (var x = 0; x < w; x += 2) for (var by = 0; by < band; by++) {
-      bg.push(labAt(d, (by * w + x) * 4));
-      bg.push(labAt(d, ((h - 1 - by) * w + x) * 4));
+      var wx = (x < corner || x >= w - corner) ? 3 : 1;
+      pushAt(x, by, wx);
+      pushAt(x, h - 1 - by, wx);
     }
     for (var y = 0; y < h; y += 2) for (var bx = 0; bx < band; bx++) {
-      bg.push(labAt(d, (y * w + bx) * 4));
-      bg.push(labAt(d, (y * w + (w - 1 - bx)) * 4));
+      var wy = (y < corner || y >= h - corner) ? 3 : 1;
+      pushAt(bx, y, wy);
+      pushAt(w - 1 - bx, y, wy);
     }
     var centers = kmeansLab(bg, 2, 8);
 
+    /* 배경은 **하나**다. 상품컷의 배경은 한 가지 색이고, 두 번째 군집으로
+     * 잡히는 것은 대개 옷 주변 그림자거나 테두리에 닿은 옷 자신이다.
+     * 그것까지 배경으로 인정하면 배경 모델이 옷 쪽으로 끌려간다.
+     * 실측: 회색 후드에서 두 군집이 L98.8(진짜 배경)과 L91.1(옷 그림자)로
+     * 잡혔고, 후드 몸통(L75.9)이 L91.1 과 ΔE 10.1 — 고정 임계 11 아래라
+     * 몸통이 통째로 지워졌다. 테두리에서 가장 많은 표를 받은 하나만 쓴다. */
+    if (centers.length > 1) {
+      var cnt = centers.map(function () { return 0; });
+      for (var bi = 0; bi < bg.length; bi++) {
+        var bbest = 0, bd2 = 1e9;
+        for (var bc = 0; bc < centers.length; bc++) {
+          var dd2 = CC.deltaE2000(bg[bi], centers[bc]);
+          if (dd2 < bd2) { bd2 = dd2; bbest = bc; }
+        }
+        cnt[bbest]++;
+      }
+      var win = 0;
+      for (var wc = 1; wc < cnt.length; wc++) if (cnt[wc] > cnt[win]) win = wc;
+      centers = [centers[win]];
+    }
+
+    /* 임계를 **배경 자신의 흩어짐에서** 정한다.
+     *
+     * 고정값(ΔE 11)은 배경이 얼마나 균일한지를 모른다. 깨끗한 흰 배경에서는
+     * 지나치게 헐거워 밝은 옷을 먹고, 얼룩진 배경에서는 지나치게 빡빡해
+     * 배경이 남는다. 인물 분리(segment.js)에서 같은 교훈을 이미 얻었다 —
+     * 흰 옷·흰 벽 IoU 가 0.33 에서 0.86 으로 올라간 것이 이 방법이다.
+     *
+     * 배경이 테두리의 대부분이므로 하위 4분위까지는 확실히 배경이다.
+     * 그 거리의 몇 배를 임계로 삼으면 배경의 균일도에 맞춰 저절로 조절된다. */
+    var dists = [];
+    for (var bj = 0; bj < bg.length; bj++) dists.push(CC.deltaE2000(bg[bj], centers[0]));
+    dists.sort(function (a, b) { return a - b; });
+    var p75 = dists[Math.floor(dists.length * 0.75)] || 0;
+    var TH = clampNum(p75 * 2.4 + 1.6, 3.5, 11);
+
     /* 배경과 가까운 픽셀을 후보로 두고, **테두리에서 연결된 것만** 지운다.
      * 연결성을 보지 않으면 흰 셔츠의 몸통이 통째로 날아간다. */
-    var TH = 11;
     var cand = new Uint8Array(w * h);
     for (var i = 0, p = 0; i < d.length; i += 4, p++) {
       var lab = labAt(d, i), best = 1e9;
@@ -7112,8 +7167,14 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       d[j + 3] = fg[p2] ? 255 : 0;
     }
     ctx.putImageData(img, 0, 0);
-    return { canvas: work.canvas, ctx: ctx, w: w, h: h, mask: fg, ratio: n / (w * h) };
+    /* 학습한 배경색을 함께 돌려준다. 반입이 이상할 때 "무엇을 배경으로
+     * 봤는가"를 모르면 원인을 짐작할 수밖에 없다 — 실제로 회색 후드가
+     * 통째로 지워졌을 때 이 값이 없어서 한참을 헤맸다. */
+    return { canvas: work.canvas, ctx: ctx, w: w, h: h, mask: fg, ratio: n / (w * h),
+             centers: centers, threshold: TH };
   }
+
+  function clampNum(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
   function labAt(d, i) { return CC.rgbToLab(d[i], d[i + 1], d[i + 2]); }
 
@@ -7199,7 +7260,15 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     return table[table.length - 1][0];
   }
   var HEM_RATIO_TOP = [['crop', 1.02], ['waist', 1.26], ['hip', 1.58], ['thigh', 1.90], ['knee', 9]];
-  var HEM_RATIO_BOTTOM = [['thigh', 1.15], ['knee', 1.70], ['midi', 2.25], ['ankle', 9]];
+  /* 치마와 바지는 다른 표를 쓴다.
+   *
+   * 하나로 쓰면서 미디/앵클 경계를 2.25 에 두었는데, 실물 긴바지는 재단에
+   * 따라 2.0~2.5 에 흩어진다 — 가장 흔한 옷이 경계 위에 앉아 있었다.
+   * 실측에서 코듀로이 팬츠가 2.06 으로 '미디'가 되어 종아리에서 잘렸다.
+   * 게다가 '미디'는 치마 길이지 바지 길이가 아니다. 바지에 그 칸이 있는
+   * 것 자체가 오분류를 부른다. */
+  var HEM_RATIO_SKIRT = [['thigh', 1.15], ['knee', 1.70], ['midi', 2.25], ['ankle', 9]];
+  var HEM_RATIO_PANTS = [['thigh', 1.05], ['knee', 1.62], ['ankle', 9]];
 
   var SLEEVE_RATIO = {
     long:   { K: 0.210, R: 0.058 },
@@ -7408,7 +7477,8 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       cx: cx, waistY: waistY, waistHalf: waistHalf, hipY: hipY, hipHalf: hipHalf,
       crotchY: isSkirt ? hipY + (hemY - hipY) * 0.18 : crotchY,
       hemY: hemY, legHalf: legHalf, taper: taper, isSkirt: isSkirt,
-      hem: pickBy((hemY - waistY) / Math.max(1, hipHalf * 2), HEM_RATIO_BOTTOM),
+      hem: pickBy((hemY - waistY) / Math.max(1, hipHalf * 2),
+                  isSkirt ? HEM_RATIO_SKIRT : HEM_RATIO_PANTS),
       flare: isSkirt ? Math.max(1.0, (rows[Math.round(hemY)].w / 2) / hipHalf) : 1.25,
       crotchDrop: HH * 0.06
     };
