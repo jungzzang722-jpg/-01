@@ -135,6 +135,15 @@ def load_model():
             schp_ckpt=os.path.join(repo_path, 'SCHP'),
             device=device,
         )
+    # 어텐션을 조각내어 계산한다 — 한 번에 잡는 메모리가 줄어든다.
+    # 있으면 쓰고 없으면 넘어간다. 해상도를 낮춘 것만으로도 대개 충분하지만,
+    # 둘을 겹쳐 두면 더 큰 사진에서도 버틴다.
+    try:
+        pipeline.unet.set_attention_slice('max')
+        print('  어텐션 분할 켬')
+    except Exception as e:
+        print('  어텐션 분할 못 켬(무시): %s' % e)
+
     mask_processor = VaeImageProcessor(
         vae_scale_factor=8, do_normalize=False,
         do_binarize=True, do_convert_grayscale=True,
@@ -187,8 +196,18 @@ def run_model(person_png: bytes, garment_png: bytes, category: str,
     m = load_model()          # 저장소 경로를 sys.path 에 넣는 일도 여기서 한다
     from utils import resize_and_crop, resize_and_padding
     torch = m['torch']
-    W = int(os.environ.get('VTON_WIDTH', '768'))
-    H = int(os.environ.get('VTON_HEIGHT', '1024'))
+    # 해상도 — 맥에서 이걸 잘못 잡으면 바로 터진다.
+    #
+    # CatVTON 은 인물과 옷을 **이어 붙여** 어텐션을 계산한다. 그래서 토큰 수가
+    # 두 배가 되고, 어텐션 행렬은 토큰 수의 **제곱**으로 자란다. 768×1024 에서는
+    # 그 행렬 하나가 18GB 다 — 실제로 "Invalid buffer size: 18.00 GiB" 로 죽었다.
+    # NVIDIA 쪽은 xformers 가 이걸 쪼개 주지만 맥에는 xformers 가 없다.
+    #
+    # 384×512 로 낮추면 토큰이 1/4, 어텐션은 1/16 이 된다. 학습 해상도보다
+    # 낮아 디테일은 줄지만, 18GB 를 요구하다 죽는 것보다는 낫다.
+    _mps = (m['device'] == 'mps')
+    W = int(os.environ.get('VTON_WIDTH', '384' if _mps else '768'))
+    H = int(os.environ.get('VTON_HEIGHT', '512' if _mps else '1024'))
 
     person = _flatten_on_white(person_png)
     cloth = _flatten_on_white(garment_png) if garment_png else None
@@ -214,7 +233,8 @@ def run_model(person_png: bytes, garment_png: bytes, category: str,
 
     # 맥 GPU 는 한 단계가 느리다. 30 단계면 몇 분, 관람객은 그만큼 기다리지
     # 않는다. 20 단계에서 눈에 띄는 품질 차이는 거의 없다. cuda 는 빠르니 30.
-    steps = STEPS or (20 if m['device'] == 'mps' else 30)
+    steps = STEPS or (20 if _mps else 30)
+    print('  %dx%d · %d단계' % (W, H, steps))
 
     seed = int(os.environ.get('VTON_SEED', '555'))
     generator = torch.Generator(device=m['device']).manual_seed(seed) if seed >= 0 else None
@@ -375,6 +395,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # 서버 창에 전체 역추적을 남긴다. 브라우저로는 한 줄만 가는데,
             # 어느 줄에서 터졌는지는 이것 없이는 알 수 없다.
             import traceback; traceback.print_exc()
+            msg = str(e)
+            # 메모리 부족은 원인이 분명하고 대처도 분명하다. 그 두 줄을 붙여 준다.
+            if re.search(r'buffer size|out of memory|OutOfMemory|MPS backend', msg, re.I):
+                return self._json(500, {'ok': False, 'ko':
+                    '메모리가 부족합니다 (%s). 해상도를 낮춰 다시 켜 주세요: '
+                    'VTON_WIDTH=320 VTON_HEIGHT=448 로 서버를 다시 시작하시면 됩니다.' % msg})
             return self._json(500, {'ok': False, 'ko': '합성 실패: %s: %s' % (type(e).__name__, e)})
 
         print('  합성 %s  %.1fs  %dKB' % (category, time.time() - t0, len(out) // 1024))
