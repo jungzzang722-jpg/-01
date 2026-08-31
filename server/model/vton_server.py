@@ -135,14 +135,17 @@ def load_model():
             schp_ckpt=os.path.join(repo_path, 'SCHP'),
             device=device,
         )
-    # 어텐션을 조각내어 계산한다 — 한 번에 잡는 메모리가 줄어든다.
-    # 있으면 쓰고 없으면 넘어간다. 해상도를 낮춘 것만으로도 대개 충분하지만,
-    # 둘을 겹쳐 두면 더 큰 사진에서도 버틴다.
-    try:
-        pipeline.unet.set_attention_slice('max')
-        print('  어텐션 분할 켬')
-    except Exception as e:
-        print('  어텐션 분할 못 켬(무시): %s' % e)
+    # 어텐션 분할(set_attention_slice)은 **쓰면 안 된다.**
+    #
+    # 메모리를 아껴 주므로 켜고 싶지만, diffusers 는 이걸 켤 때 UNet 의 어텐션
+    # 처리기를 표준 처리기로 통째로 갈아 끼운다. CatVTON 은 텍스트 조건을
+    # 일부러 없앤 SkipAttnProcessor 를 쓰는데 그게 덮여 버리고, 없는 텍스트
+    # 경로가 되살아나 이렇게 죽는다:
+    #   linear(): input and weight.T shapes cannot be multiplied (24576x320 and 768x320)
+    #   (768 = CLIP 텍스트 임베딩 차원 — 있을 리 없는 값이다)
+    #
+    # "있으면 쓰고 없으면 넘어간다"로 감싸 두었지만, 이건 켜지는 데 성공해서
+    # 망가뜨리는 경우였다. 메모리는 해상도로 줄인다.
 
     mask_processor = VaeImageProcessor(
         vae_scale_factor=8, do_normalize=False,
