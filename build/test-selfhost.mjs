@@ -82,15 +82,25 @@ const real = spawn('python3', ['server/model/vton_server.py'], {
   env: { ...process.env, PORT: String(PORT_MODEL + 10), VTON_MODE: 'real' },
   stdio: ['ignore', 'pipe', 'pipe']
 });
-await new Promise((r) => real.stdout.once('data', r));
-await wait(400);
+/* 서버가 안 뜨면 여기서 영원히 기다리게 된다. 실제로 그렇게 멈춘 적이 있다 —
+ * torch 가 없어 load_model 이 ImportError 를 냈는데 시작 코드가
+ * NotImplementedError 만 잡고 있었다. 테스트가 매달리지 않게 시한을 둔다. */
+const realUp = await Promise.race([
+  new Promise((r) => real.stdout.on('data', (d) => { if (String(d).includes('http://')) r(true); })),
+  wait(15000).then(() => false)
+]);
+check(realUp, 'real 모드에서도 서버가 뜸 (모델 적재 실패해도)');
+await wait(300);
 const fd = new FormData();
 fd.append('person', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'p.png');
 fd.append('category', 'top');
 const rr = await fetch(`http://127.0.0.1:${PORT_MODEL + 10}/tryon`, { method: 'POST', body: fd });
 const rj = await rr.json();
-check(rr.status === 501, '아직 구현 안 됨을 501 로 알려줌', String(rr.status));
-check(/mock/.test(rj.ko || ''), '무엇을 하면 되는지 알려줌', (rj.ko || '').slice(0, 46));
+check(rr.status === 503 || rr.status === 501, '왜 안 되는지를 상태 코드로 알려줌', String(rr.status));
+check(/설치|mock/.test(rj.ko || ''), '무엇을 하면 되는지 알려줌', (rj.ko || '').slice(0, 60));
+const rh = await (await fetch(`http://127.0.0.1:${PORT_MODEL + 10}/health`)).json();
+check(rh.ok === true && rh.loaded === false, '/health 가 살아 있고 미적재를 보고');
+check(!!rh.error, '/health 가 실패 이유를 담고 있음', (rh.error || '').slice(0, 50));
 real.kill();
 
 console.log('\npage errors: ' + (errs.length ? errs.join(' | ') : 'none'));

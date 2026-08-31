@@ -43,6 +43,7 @@ import io
 import os
 import json
 import re
+import sys
 import time
 import http.server
 import socketserver
@@ -54,6 +55,9 @@ STEPS = int(os.environ.get('VTON_STEPS', '30'))
 MAX_BODY = 24 * 1024 * 1024
 
 _model = None
+# 모델이 왜 안 올라왔는지. 서버는 뜨되 이유를 계속 말할 수 있어야 한다 —
+# 전시장에서 서버가 아예 안 뜨면 확인할 방법이 없다.
+_load_error = None
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -63,56 +67,130 @@ def load_model():
     """
     모델을 한 번만 올린다. 요청마다 올리면 매번 수십 초가 걸린다.
 
-    CatVTON 기준 참고값 (README 기재):
-        1024×768 추론에 VRAM 8GB 미만, 전체 파라미터 899M
-        → 소비자용 GPU(RTX 3060 12GB 등)에서도 돌아간다. 전시용으로 이게 크다.
+    CatVTON 기준 (저장소 README·app.py 확인):
+        1024×768 추론에 VRAM 약 8GB, 전체 파라미터 899M
+        → RTX 3060 12GB 같은 소비자용 GPU 에서 돈다. 전시용으로 이게 크다.
 
-    Leffa(다른 후보)는 try-on 에 VRAM 12GB · RAM 32GB · 설치 20GB 를 요구한다.
-
-    실제 적재 코드는 모델 저장소의 현재 README 를 따라야 한다. 여기 적어 두면
-    조용히 낡는다 — 그래서 형태만 남기고 비워 둔다.
+    가중치는 huggingface_hub 가 처음 한 번 자동으로 내려받는다.
     """
-    global _model
+    global _model, _load_error
     if _model is not None:
         return _model
 
-    # 예시 골격 (실제 클래스명·인자는 해당 저장소 문서를 따를 것)
-    #
-    #   import torch
-    #   from model.pipeline import CatVTONPipeline        # 저장소에서 제공
-    #   _model = CatVTONPipeline(
-    #       base_ckpt="stabilityai/stable-diffusion-inpainting",
-    #       attn_ckpt="zhengchong/CatVTON",
-    #       device="cuda",
-    #       weight_dtype=torch.float16,
-    #   )
-    #
-    raise NotImplementedError(
-        "load_model() 을 채워 주세요. VTON_MODE=mock 으로 배선을 먼저 확인하실 수 있습니다."
+    # CatVTON 의 `model.*` 과 `utils` 는 **저장소 기준 경로**다. 이 파일을
+    # 저장소 밖에서 실행하면 그대로 ModuleNotFoundError 가 난다.
+    # VTON_REPO_DIR 로 저장소 위치를 받아 경로에 넣는다.
+    repo_dir = os.environ.get('VTON_REPO_DIR', '')
+    if repo_dir and repo_dir not in sys.path:
+        sys.path.insert(0, repo_dir)
+
+    import torch
+    from diffusers.image_processor import VaeImageProcessor
+    from huggingface_hub import snapshot_download
+    from model.cloth_masker import AutoMasker
+    from model.pipeline import CatVTONPipeline
+    from utils import init_weight_dtype
+
+    repo_path = snapshot_download(repo_id=os.environ.get('VTON_REPO', 'zhengchong/CatVTON'))
+    device = os.environ.get('VTON_DEVICE', 'cuda')
+
+    pipeline = CatVTONPipeline(
+        base_ckpt=os.environ.get('VTON_BASE', 'runwayml/stable-diffusion-inpainting'),
+        attn_ckpt=repo_path,
+        attn_ckpt_version='mix',
+        weight_dtype=init_weight_dtype(os.environ.get('VTON_PRECISION', 'bf16')),
+        use_tf32=True,
+        device=device,
     )
+    # 옷이 놓일 자리를 알려주는 마스크를 만든다. 사람 파싱(SCHP)과
+    # 자세 추정(DensePose)이 여기 들어간다 — 설치 용량의 대부분이 이것이다.
+    automasker = AutoMasker(
+        densepose_ckpt=os.path.join(repo_path, 'DensePose'),
+        schp_ckpt=os.path.join(repo_path, 'SCHP'),
+        device=device,
+    )
+    mask_processor = VaeImageProcessor(
+        vae_scale_factor=8, do_normalize=False,
+        do_binarize=True, do_convert_grayscale=True,
+    )
+
+    _model = {
+        'pipeline': pipeline, 'automasker': automasker,
+        'mask_processor': mask_processor, 'device': device, 'torch': torch,
+    }
+    _load_error = None
+    return _model
+
+
+def _flatten_on_white(png_bytes):
+    """
+    투명 배경을 흰색으로 채운다.
+
+    우리가 보내는 인물 이미지는 **이미 배경이 지워져 있다.** 그런데 모델은
+    배경이 있는 사진으로 학습돼 있어서, 투명 채널을 그대로 넣으면 알파가
+    검정으로 해석되어 결과가 무너진다. 상품컷과 같은 흰 배경으로 만들어 준다.
+    """
+    from PIL import Image
+    im = Image.open(io.BytesIO(png_bytes))
+    if im.mode in ('RGBA', 'LA') or (im.mode == 'P' and 'transparency' in im.info):
+        im = im.convert('RGBA')
+        bg = Image.new('RGB', im.size, (255, 255, 255))
+        bg.paste(im, mask=im.split()[-1])
+        return bg
+    return im.convert('RGB')
 
 
 def run_model(person_png: bytes, garment_png: bytes, category: str) -> bytes:
     """
     인물 PNG + 옷 PNG → 합성 PNG.
 
-    주의할 점 셋.
+    app.py 의 submit_function 과 같은 순서다.
+      1) 인물은 잘라 맞추고(resize_and_crop), 옷은 여백을 채워 맞춘다
+         (resize_and_padding). 둘을 반대로 하면 옷이 잘려 나간다.
+      2) 마스크를 만들고 가장자리를 흐린다(blur_factor=9). 흐리지 않으면
+         옷과 피부의 경계에 딱딱한 선이 남는다.
+      3) 파이프라인을 돌린다.
 
-    1) **인물 이미지는 배경이 이미 제거되어 있다.** 대부분의 모델은 배경이 있는
-       사진으로 학습돼 있어서 투명 배경을 그대로 넣으면 결과가 나빠진다.
-       흰색으로 채워 넣는 편이 안전하다.
-
-    2) **마스크가 필요한 모델이 많다.** 옷이 놓일 자리를 미리 알려줘야 한다.
-       보통 사람 파싱(human parsing) + 자세 추정을 함께 돌린다. 그 전처리가
-       실제 설치 용량의 대부분을 차지한다.
-
-    3) **해상도.** 대개 1024×768 같은 고정 비율로 학습돼 있다. 넣기 전에
-       맞추고, 나온 뒤 원래 비율로 되돌린다.
+    결과는 학습 해상도(기본 768×1024)로 나온다. 원래 비율로 되돌리는 것은
+    합성 결과를 다시 늘리는 일이라 화질이 떨어지므로, 브라우저에서 배치할 때
+    맞추는 편이 낫다 — 여기서는 그대로 돌려준다.
     """
-    model = load_model()
-    raise NotImplementedError(
-        "run_model() 을 채워 주세요. 저장소의 inference 예제를 그대로 옮기면 됩니다."
-    )
+    from PIL import Image
+
+    m = load_model()          # 저장소 경로를 sys.path 에 넣는 일도 여기서 한다
+    from utils import resize_and_crop, resize_and_padding
+    torch = m['torch']
+    W = int(os.environ.get('VTON_WIDTH', '768'))
+    H = int(os.environ.get('VTON_HEIGHT', '1024'))
+
+    person = _flatten_on_white(person_png)
+    cloth = _flatten_on_white(garment_png) if garment_png else None
+    if cloth is None:
+        raise ValueError('옷 이미지가 없습니다.')
+
+    person = resize_and_crop(person, (W, H))
+    cloth = resize_and_padding(cloth, (W, H))
+
+    # CatVTON 의 cloth_type 은 upper / lower / overall 이다
+    cloth_type = 'lower' if category == 'bottom' else 'upper'
+    mask = m['automasker'](person, cloth_type)['mask']
+    mask = m['mask_processor'].blur(mask, blur_factor=9)
+
+    seed = int(os.environ.get('VTON_SEED', '555'))
+    generator = torch.Generator(device=m['device']).manual_seed(seed) if seed >= 0 else None
+
+    result = m['pipeline'](
+        image=person,
+        condition_image=cloth,
+        mask=mask,
+        num_inference_steps=STEPS,
+        guidance_scale=float(os.environ.get('VTON_GUIDANCE', '2.5')),
+        generator=generator,
+    )[0]
+
+    buf = io.BytesIO()
+    result.save(buf, format='PNG')
+    return buf.getvalue()
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -182,10 +260,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.split('?')[0] == '/health':
+            if MODE == 'mock':
+                ko = '모의 모드 — 실제 합성은 하지 않습니다'
+            elif _model is not None:
+                ko = '준비됨'
+            else:
+                ko = '모델이 올라오지 않았습니다: %s' % (_load_error or '알 수 없음')
             return self._json(200, {
                 'ok': True, 'mode': MODE, 'model': MODEL_NAME,
-                'loaded': _model is not None,
-                'ko': '모의 모드 — 실제 합성은 하지 않습니다' if MODE == 'mock' else '준비됨'
+                'loaded': _model is not None, 'error': _load_error, 'ko': ko
             })
         return self._json(404, {'ok': False, 'ko': '없는 경로입니다.'})
 
@@ -219,6 +302,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 else run_model(person, garment, category)
         except NotImplementedError as e:
             return self._json(501, {'ok': False, 'ko': str(e)})
+        except ImportError as e:
+            # 전시장에서 가장 흔한 사고다. 무엇이 없는지 정확히 말해 준다.
+            return self._json(503, {'ok': False, 'ko':
+                '필요한 패키지가 설치되지 않았습니다: %s — '
+                'CatVTON 저장소의 INSTALL.md 를 따라 설치해 주세요.' % e})
         except Exception as e:
             return self._json(500, {'ok': False, 'ko': '합성 실패: %s' % e})
 
@@ -241,8 +329,13 @@ if __name__ == '__main__':
         try:
             load_model()
             print('모델 준비 완료')
-        except NotImplementedError as e:
-            print('⚠ %s' % e)
+        except Exception as e:
+            # 여기서 죽으면 안 된다. 서버가 아예 안 뜨면 무엇이 잘못됐는지
+            # 확인할 창구조차 없어진다 — 전시 당일에 가장 곤란한 상황이다.
+            _load_error = '%s: %s' % (type(e).__name__, e)
+            print('⚠ 모델을 올리지 못했습니다: %s' % _load_error)
+            print('  서버는 그대로 띄웁니다. /health 로 상태를 볼 수 있고,')
+            print('  합성 요청에는 이유를 담아 응답합니다. 앱은 내장 엔진으로 되돌아갑니다.')
     with Server(('0.0.0.0', PORT), Handler) as httpd:
         print('vton-model  http://localhost:%d  mode=%s  model=%s' % (PORT, MODE, MODEL_NAME))
         print('  라이선스: 공개 VTON 모델은 대부분 CC BY-NC-SA(비상업 전용)입니다.')
