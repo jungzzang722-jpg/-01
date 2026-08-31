@@ -43,6 +43,7 @@ import io
 import os
 import json
 import re
+import socket
 import sys
 import time
 import http.server
@@ -338,6 +339,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
 class Server(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
+    # 맥에서 localhost 는 IPv6(::1) 로 먼저 풀린다. IPv4 에만 붙어 있으면
+    # 브라우저가 연결할 곳이 없고, 서버에는 아무 기록도 남지 않는다.
+    address_family = socket.AF_INET6
+
+    def server_bind(self):
+        # IPv6 소켓 하나로 IPv4 도 함께 받는다(듀얼스택)
+        try:
+            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        except OSError:
+            pass
+        super().server_bind()
 
 
 if __name__ == '__main__':
@@ -353,7 +365,23 @@ if __name__ == '__main__':
             print('⚠ 모델을 올리지 못했습니다: %s' % _load_error)
             print('  서버는 그대로 띄웁니다. /health 로 상태를 볼 수 있고,')
             print('  합성 요청에는 이유를 담아 응답합니다. 앱은 내장 엔진으로 되돌아갑니다.')
-    with Server(('0.0.0.0', PORT), Handler) as httpd:
-        print('vton-model  http://localhost:%d  mode=%s  model=%s' % (PORT, MODE, MODEL_NAME))
+    # IPv6 듀얼스택을 먼저 시도하고, 없는 환경이면 IPv4 로 물러난다.
+    # 맥에서 localhost 는 ::1 로 먼저 풀리므로 IPv4 만으로는 연결이 안 된다.
+    httpd = None
+    for family, host in ((socket.AF_INET6, '::'), (socket.AF_INET, '0.0.0.0')):
+        try:
+            Server.address_family = family
+            httpd = Server((host, PORT), Handler)
+            break
+        except OSError as e:
+            if family is socket.AF_INET6:
+                print('  IPv6 를 쓸 수 없어 IPv4 로 붙습니다.')
+                continue
+            print('⚠ 포트 %d 에 붙지 못했습니다: %s' % (PORT, e))
+            print('  이전에 켠 서버가 남아 있는지 확인해 주세요.')
+            raise SystemExit(1)
+    with httpd:
+        print('vton-model  http://localhost:%d  mode=%s  model=%s  bind=%s'
+              % (PORT, MODE, MODEL_NAME, host))
         print('  라이선스: 공개 VTON 모델은 대부분 CC BY-NC-SA(비상업 전용)입니다.')
         httpd.serve_forever()

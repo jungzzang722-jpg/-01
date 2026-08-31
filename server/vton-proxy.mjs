@@ -308,8 +308,36 @@ const server = http.createServer(async (req, res) => {
   });
 });
 
-server.listen(PORT, () => {
+/* 어디에 붙일 것인가 — 겉보기보다 중요하다.
+ *
+ * 주소를 지정하지 않으면 Node 는 IPv4 의 0.0.0.0 에만 붙는다. 그런데
+ * **맥에서 localhost 는 IPv6(::1) 로 먼저 풀린다.** 그러면 브라우저가 연결할
+ * 곳이 없어 "연결하지 못했습니다"만 나오고 서버에는 아무 기록도 남지 않는다 —
+ * 원인을 짐작할 단서가 없는 가장 나쁜 형태의 실패다.
+ *
+ * '::' 는 듀얼스택이라 IPv4·IPv6 양쪽을 받지만, IPv6 가 아예 없는 환경에서는
+ * EAFNOSUPPORT 로 **서버가 뜨지 않는다.** 그건 더 나쁘다.
+ * 그래서 먼저 시도하고, 안 되면 IPv4 로 물러난다. */
+/* listen 에 콜백을 넘기면 'listening' 리스너로 등록된다. IPv6 시도가 실패한
+ * 뒤 IPv4 로 다시 붙으면 그 콜백이 **아직 살아 있어** 배너가 두 번 찍힌다.
+ * 디버깅할 때 정확히 헷갈리는 종류라, 리스너를 한 곳에만 둔다. */
+server.on('listening', () => {
+  const a = server.address();
   console.log(`vton-proxy  http://localhost:${PORT}  provider=${PROVIDER}` +
     `  한도 ${QUOTA_PER_DAY}벌/일 (IP ${QUOTA_PER_IP_DAY})` +
+    `  bind=${a && a.address}` +
     (API_KEY || PROVIDER === 'custom' ? '' : '  ⚠ VTON_API_KEY 미설정'));
 });
+server.on('error', (e) => {
+  if (e && e.code === 'EAFNOSUPPORT') {
+    console.log('  IPv6 를 쓸 수 없어 IPv4 로 붙습니다.');
+    server.listen(PORT, '0.0.0.0');
+    return;
+  }
+  if (e && e.code === 'EADDRINUSE') {
+    console.error(`⚠ 포트 ${PORT} 이 이미 사용 중입니다. 이전에 켠 서버가 남아 있는지 확인해 주세요.`);
+    process.exit(1);
+  }
+  throw e;
+});
+server.listen(PORT, '::');

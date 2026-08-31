@@ -399,8 +399,31 @@
       if (e && e.name === 'AbortError') {
         return { ok: false, ko: '시간이 너무 오래 걸려 중단했습니다. 잠시 후 다시 시도해 주세요.' };
       }
-      return { ok: false, ko: '고화질 합성 서버에 연결하지 못했습니다. 주소를 확인해 주세요.' };
+      return { ok: false, ko: connectHelp(url) };
     });
+  }
+
+  /**
+   * 연결 실패는 원인을 알려주지 않는다.
+   *
+   * 브라우저의 fetch 는 서버가 꺼졌든, 포트가 틀렸든, IPv6 로 못 붙었든,
+   * CORS 든 전부 같은 오류를 던진다. 그래서 "연결하지 못했습니다" 한 줄만
+   * 보여주면 어디를 고쳐야 할지 알 수 없다 — 실제로 그 화면에서 막혔다.
+   * 가능성이 높은 순서대로 무엇을 해보면 되는지 적는다.
+   */
+  function connectHelp(url) {
+    var isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(url || '');
+    var msg = '고화질 합성 서버에 연결하지 못했습니다. ';
+    if (isLocal) {
+      msg += '① 중계 서버를 켜셨는지 확인해 주세요. ' +
+             '② 켜져 있다면 터미널에서 node server/doctor.mjs 를 실행하면 ' +
+             '어디서 끊겼는지 알려줍니다. ' +
+             '③ 맥에서는 localhost 대신 http://127.0.0.1:8787 이 되는 경우가 있습니다.';
+    } else {
+      msg += '주소가 맞는지, 서버가 켜져 있는지 확인해 주세요. ' +
+             'https 페이지에서 http 주소는 브라우저가 막습니다.';
+    }
+    return msg;
   }
 
   /* 오류를 사용자의 말로 옮긴다. 상태 코드만 보여주면 아무도 못 고친다. */
@@ -434,7 +457,7 @@
       signal: ctrl ? ctrl.signal : undefined
     })
       .then(function (r) { clearTimeout(timer); return r.ok ? r.json() : { ok: false, ko: 'HTTP ' + r.status }; })
-      .catch(function () { clearTimeout(timer); return { ok: false, ko: '연결하지 못했습니다.' }; });
+      .catch(function () { clearTimeout(timer); return { ok: false, ko: connectHelp(u) }; });
   }
 
   global.VTON = {
