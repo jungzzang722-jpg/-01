@@ -365,7 +365,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 '필요한 패키지가 설치되지 않았습니다: %s — '
                 'CatVTON 저장소의 INSTALL.md 를 따라 설치해 주세요.' % e})
         except Exception as e:
-            return self._json(500, {'ok': False, 'ko': '합성 실패: %s' % e})
+            # 서버 창에 전체 역추적을 남긴다. 브라우저로는 한 줄만 가는데,
+            # 어느 줄에서 터졌는지는 이것 없이는 알 수 없다.
+            import traceback; traceback.print_exc()
+            return self._json(500, {'ok': False, 'ko': '합성 실패: %s: %s' % (type(e).__name__, e)})
 
         print('  합성 %s  %.1fs  %dKB' % (category, time.time() - t0, len(out) // 1024))
         self.send_response(200)

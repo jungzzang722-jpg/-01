@@ -305,6 +305,7 @@ const server = http.createServer(async (req, res) => {
      * 남은 횟수가 줄어드는 것은 사용자에게 설명할 수 없다. */
     counters.set('cid:' + cidHash, Math.max(0, (counters.get('cid:' + cidHash) || 1) - 1));
     counters.set('ip:' + ipHash, Math.max(0, (counters.get('ip:' + ipHash) || 1) - 1));
+    console.error('✗ 합성 실패:', e && e.message ? e.message : e);
     return json(res, 502, { ok: false, ko: String(e.message || e) });
   }
 

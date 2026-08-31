@@ -14608,6 +14608,16 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
 
   /* 오류를 사용자의 말로 옮긴다. 상태 코드만 보여주면 아무도 못 고친다. */
   function readableError(status, body) {
+    /* 서버가 이유를 말해 줬으면 그 말을 쓴다.
+     *
+     * "합성 서버에 문제가 있습니다(502)" 는 아무것도 알려주지 않는다 —
+     * 정작 서버는 무엇이 잘못됐는지 정확히 알고 그 문장을 보내왔는데,
+     * 여기서 상태 코드만 보고 지어낸 문장으로 덮어써 버리고 있었다.
+     * 사장님이 서버 창을 뒤져야만 원인을 알 수 있는 이유가 이것이었다. */
+    var j = null;
+    try { j = JSON.parse(body); } catch (e) { }
+    if (j && j.ko) return j.ko;
+
     if (status === 401 || status === 403) {
       return '서버가 API 키를 거부했습니다. 중계 서버의 키 설정을 확인해 주세요.';
     }
