@@ -191,7 +191,10 @@ const providers = {
       body: fd
     });
     if (!r.ok) throw new Error('provider ' + r.status + ': ' + (await r.text()).slice(0, 300));
-    return Buffer.from(await r.arrayBuffer());
+    /* 모델 서버가 모의 모드면 그 사실을 그대로 실어 보낸다.
+     * 인물 사진이 그대로 돌아오는데 화면이 "고화질"이라고 말하면,
+     * 배선 문제를 합성 품질 문제로 착각하게 된다. */
+    return { png: Buffer.from(await r.arrayBuffer()), mock: r.headers.get('x-vton-mock') === '1' };
   }
 };
 
@@ -283,6 +286,7 @@ const server = http.createServer(async (req, res) => {
    * 왕복을 서버 안에서 처리하는 이유는, 클라이언트가 매번 큰 이미지를
    * 다시 올리면 지연이 배로 늘기 때문이다. */
   let current = person.data;
+  let mock = false;
   const t0 = Date.now();
   try {
     for (const job of jobs) {
@@ -291,7 +295,10 @@ const server = http.createServer(async (req, res) => {
        * 입고 있으므로 처음의 마스크가 맞지 않는다 — 그 자리는 모델이
        * 스스로 판단하게 두는 편이 낫다. */
       const m = (job.index === jobs[0].index && maskPart) ? maskPart.data : null;
-      current = await impl(current, g ? g.data : null, job, m);
+      /* 공급자는 Buffer 또는 { png, mock } 을 돌려준다 */
+      const out = await impl(current, g ? g.data : null, job, m);
+      if (out && out.png) { current = out.png; if (out.mock) mock = true; }
+      else current = out;
     }
   } catch (e) {
     /* 실패한 호출로 사용자의 횟수를 깎지 않는다. 우리 쪽 사정으로 실패했는데
@@ -302,7 +309,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   return json(res, 200, {
-    ok: true, provider: PROVIDER, ms: Date.now() - t0,
+    ok: true, provider: PROVIDER, mock: mock, ms: Date.now() - t0,
     quota: { perDay: QUOTA_PER_DAY, used: q.used, left: Math.max(0, QUOTA_PER_DAY - q.used) },
     image: 'data:image/png;base64,' + current.toString('base64')
   });

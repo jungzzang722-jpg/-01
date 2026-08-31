@@ -122,6 +122,7 @@ const r = await page.evaluate(async ({ fx, url }) => {
     maskPng = mc.toDataURL('image/png');
   }
   return { ok: res.ok, ko: res.ko || null, len: res.dataUrl ? res.dataUrl.length : 0,
+           mock: !!res.mock, cachedAfter: null,
            quota: res.quota || null, stages, ms: res.ms, maskSent, maskInfo, maskPng };
 }, { fx, url: `http://127.0.0.1:${PORT_PROXY}` });
 
@@ -130,6 +131,9 @@ check(r.maskSent, '옷 자리 마스크를 함께 보냄 (Detectron2 불필요)'
   r.maskInfo ? r.maskInfo : '');
 check(r.quota && r.quota.left === 4, '한도가 1 줄어듦', r.quota ? r.quota.left + '/5' : '없음');
 check(r.stages.length >= 2, '진행 단계를 알려줌', r.stages.join(' → '));
+/* 모의 결과가 성공처럼 보이면 안 된다. 실제로 그렇게 보여서, 배선 문제를
+ * 합성 품질 문제로 착각하고 한참을 엉뚱한 데서 찾았다. */
+check(r.mock === true, '모의 결과임을 브라우저까지 알려줌', 'mock=' + r.mock);
 if (r.maskPng) {
   fs.writeFileSync('build/out/vton-mask.png', Buffer.from(r.maskPng.split(',')[1], 'base64'));
 }

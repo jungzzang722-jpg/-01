@@ -89,6 +89,8 @@ if (!m.ok) {
     (mj?.loaded ? '  모델 적재됨' : '')));
   if (mj?.mode === 'mock') {
     console.log(hint('지금은 모의 모드입니다 — 인물 사진이 그대로 돌아옵니다(정상).'));
+    console.log(hint('결과 위에 빨간 MOCK 띠가 보이면 그 뜻입니다. 실제로 옷을 입히려면'));
+    console.log(hint('CatVTON 을 설치하고 VTON_MODE=real 로 다시 띄워 주세요.'));
   }
   if (mj?.mode === 'real' && !mj.loaded) {
     console.log(no('모델이 올라오지 않았습니다: ' + (mj.error || '알 수 없음')));

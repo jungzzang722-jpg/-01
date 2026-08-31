@@ -220,7 +220,27 @@ def run_mock(person_png: bytes, garment_png: bytes, category: str,
     사실이 원인을 절반으로 좁혀 준다.
     """
     time.sleep(float(os.environ.get('VTON_MOCK_DELAY', '0.3')))   # 지연을 흉내 낸다
-    return person_png
+
+    # 결과에 "모의"라고 써 둔다.
+    #
+    # 안 써 두면 사용자는 인물 사진이 그대로 돌아온 것을 **합성 실패**로 읽는다.
+    # 실제로 그런 일이 있었다: 서버가 mock 으로 떠 있는데 화면은 "고화질 0.8초"
+    # 라고만 말해서, 배선이 아니라 합성 품질을 의심하게 만들었다.
+    # 헤더로도 알리지만(X-VTON-Mock), 그림 자체에 박혀 있는 편이 확실하다.
+    try:
+        from PIL import Image, ImageDraw
+        im = Image.open(io.BytesIO(person_png)).convert('RGBA')
+        band = max(22, im.height // 22)
+        d = ImageDraw.Draw(im, 'RGBA')
+        d.rectangle([0, 0, im.width, band], fill=(200, 30, 30, 225))
+        d.text((10, max(2, band // 2 - 6)),
+               'MOCK - model not attached (VTON_MODE=mock)', fill=(255, 255, 255, 255))
+        buf = io.BytesIO()
+        im.save(buf, format='PNG')
+        return buf.getvalue()
+    except Exception:
+        # PIL 이 없거나 글꼴이 없어도 서버가 죽으면 안 된다. 헤더로는 여전히 알린다.
+        return person_png
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -331,6 +351,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         print('  합성 %s  %.1fs  %dKB' % (category, time.time() - t0, len(out) // 1024))
         self.send_response(200)
         self.send_header('Content-Type', 'image/png')
+        # 중계·브라우저가 "이건 진짜 합성이 아니다"를 알 수 있어야 한다
+        self.send_header('X-VTON-Mock', '1' if MODE == 'mock' else '0')
         self.send_header('Content-Length', str(len(out)))
         self.end_headers()
         self.wfile.write(out)

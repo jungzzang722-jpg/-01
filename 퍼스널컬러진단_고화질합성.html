@@ -14528,6 +14528,10 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
         });
       }).then(function (r) {
         if (!r.ok) return r;
+        /* 모의 결과는 저장하지 않는다. 저장해 버리면 나중에 진짜 모델을 붙여도
+         * 같은 옷·같은 사진에서는 계속 모의 결과가 나온다 — 원인을 찾을 수 없는
+         * 종류의 버그가 된다. */
+        if (r.mock) { r.ms = Math.round((global.performance || Date).now() - t0); return r; }
         return cachePut(key, r.dataUrl).then(function () {
           r.ms = Math.round((global.performance || Date).now() - t0);
           return r;
@@ -14566,7 +14570,8 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     }).then(function (j) {
       if (!j || j.ok === false) return j || { ok: false, ko: '서버가 응답을 주지 않았습니다.' };
       if (j.ok && j.image) {
-        return { ok: true, dataUrl: j.image, provider: j.provider || null, quota: j.quota || null };
+        return { ok: true, dataUrl: j.image, provider: j.provider || null,
+                 mock: !!j.mock, quota: j.quota || null };
       }
       return j;
     }).catch(function (e) {
@@ -14796,6 +14801,8 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
         $('vtRemote').src = r.dataUrl;
         $('vtRemoteCap').textContent = r.cached
           ? '고화질 · 이전 결과 재사용(전송하지 않음)'
+          : r.mock
+          ? '⚠ 모의 모드 — 모델이 붙어 있지 않습니다. 인물 사진이 그대로 돌아온 것입니다.'
           : '고화질 · ' + (r.ms != null ? (r.ms / 1000).toFixed(1) + '초' : '') +
             (r.provider ? ' · ' + r.provider : '');
         setState(runState, '완료' + quotaText(r.quota), 'good');
