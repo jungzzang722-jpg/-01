@@ -45,8 +45,29 @@ PORT="$RELAY_PORT" \
 "$NODE" server/vton-proxy.mjs &
 PIDS="$PIDS $!"
 
-# 뜰 때까지 기다렸다가 점검한다. 바로 doctor 를 돌리면 아직 안 떠서 실패한다.
-sleep 3
+# 뜰 때까지 **기다렸다가** 점검한다.
+#
+# 예전엔 sleep 3 이었는데, real 모드에서 모델을 올리는 데는 몇 분이 걸린다.
+# 그 사이에 점검이 돌아 버리면 "모델 서버에 연결할 수 없습니다"가 먼저 찍히고,
+# 몇 분 뒤 "모델 준비 완료"가 맨 아래에 찍힌다 — 순서가 뒤집혀서, 다 잘 된
+# 화면이 실패한 화면처럼 보인다. 실제로 그렇게 보였다.
+if [ "$MODE" = "real" ]; then
+  echo "· 모델을 올리는 중입니다. 처음 한 번은 가중치를 내려받느라 5~15분 걸립니다."
+  echo "  (끄지 마세요. 진행 표시가 없어도 돌고 있습니다.)"
+  WAIT=1200            # 20분
+else
+  WAIT=20
+fi
+i=0
+until curl -sf -m 2 "http://127.0.0.1:$MODEL_PORT/health" >/dev/null 2>&1; do
+  i=$((i + 1))
+  if [ "$i" -ge "$WAIT" ]; then echo "✗ 모델 서버가 뜨지 않았습니다. 위쪽 에러를 봐 주세요."; break; fi
+  # 살아 있는지 확인 — 죽었으면 더 기다릴 이유가 없다
+  if ! kill -0 $(echo $PIDS | awk '{print $1}') 2>/dev/null; then
+    echo "✗ 모델 서버가 죽었습니다. 위쪽 에러를 봐 주세요."; break
+  fi
+  sleep 1
+done
 echo
 "$NODE" server/doctor.mjs || true
 
