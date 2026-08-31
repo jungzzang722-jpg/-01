@@ -187,6 +187,51 @@
     tc.drawImage(tmp, 0, 0);
     tc.filter = 'none';
 
+    /* 여기서 **사람 밖을 잘라낸다.** 이게 없으면 결과가 통째로 무너진다.
+     *
+     * coverageOf 는 넉넉하게(ease, over) 잡고 위의 blur 가 한 번 더 넓히므로,
+     * 마스크가 실루엣 바깥까지 나간다. 그 자리에는 몸이 없고 흰 배경뿐인데
+     * 모델에게는 "여기를 옷으로 다시 그려라"로 읽힌다. 참고할 것이 없으니
+     * 모델은 죽을 그린다 — 팔 바깥의 날개 같은 덩어리, 종아리의 엉뚱한 무늬가
+     * 전부 이것이었다.
+     *
+     * 사람 실루엣은 이미 온디바이스에서 구해 두었다(body.mask). 옷은 그보다
+     * 조금 클 수 있으므로(오버사이즈) 여유를 두고 자른다.
+     *
+     * 여유폭은 재서 정했다(build/dbg-mask.mjs). 실루엣 밖 비율:
+     *   0.003 → 상의 4.9% 하의 10.4%
+     *   0.008 → 상의 6.2% 하의 13.5%     ← 여기
+     *   0.015 → 상의 7.5% 하의 16.6% (그 위로는 잘라낼 것이 없어 변화 없음)
+     * 오버사이즈 옷이 몸보다 조금 넓은 것은 정상이므로 0 은 아니어야 하고,
+     * 넓게 두면 자르는 의미가 없다. 잘라서 생기는 손해(옷이 조금 얇아짐)가
+     * 안 잘라서 생기는 손해(배경에 죽을 그림)보다 훨씬 싸다. */
+    var pad = Math.max(3, Math.round(Math.min(w, h) * 0.008));
+    var pmc = document.createElement('canvas');
+    pmc.width = w; pmc.height = h;
+    var pmx = pmc.getContext('2d', { willReadFrequently: true });
+    var pim = pmx.createImageData(w, h), pd = pim.data;
+    for (var q = 0; q < w * h; q++) {
+      var on = body.mask[q] ? 255 : 0;
+      pd[q * 4] = pd[q * 4 + 1] = pd[q * 4 + 2] = on; pd[q * 4 + 3] = 255;
+    }
+    pmx.putImageData(pim, 0, 0);
+    pmx.filter = 'blur(' + pad + 'px)';      // 실루엣을 여유만큼 부풀린다
+    pmx.drawImage(pmc, 0, 0);
+    pmx.filter = 'none';
+
+    var cim = tc.getImageData(0, 0, w, h), cd = cim.data;
+    var pdd = pmx.getImageData(0, 0, w, h).data;
+    var kept = 0;
+    for (var z = 0; z < w * h; z++) {
+      // 흐린 실루엣은 낮은 문턱으로 판정한다 — 자르는 쪽 실수가 더 비싸다
+      var inside = pdd[z * 4] > 24;
+      var v2 = (cd[z * 4] > 96 && inside) ? 255 : 0;
+      if (v2) kept++;
+      cd[z * 4] = cd[z * 4 + 1] = cd[z * 4 + 2] = v2; cd[z * 4 + 3] = 255;
+    }
+    tc.putImageData(cim, 0, 0);
+    if (!kept) return null;
+
     var out = document.createElement('canvas');
     var sc = Math.min(1, (maxSide || 1024) / Math.max(w, h));
     out.width = Math.max(1, Math.round(w * sc));

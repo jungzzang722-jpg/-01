@@ -105,7 +105,7 @@ const r = await page.evaluate(async ({ fx, url }) => {
    * 못하다 — 모델이 엉뚱한 곳을 다시 그린다. */
   const mc = VTON.maskPayload(body, [
     { garmentId: 'b-straight-denim' }, { garmentId: 't-crew-cotton' }], 1024);
-  let maskInfo = null, maskSent = false, maskPng = null;
+  let maskInfo = null, maskSent = false, maskPng = null, maskOutside = null;
   if (mc) {
     maskSent = true;
     const md = mc.getContext('2d').getImageData(0, 0, mc.width, mc.height).data;
@@ -117,6 +117,18 @@ const r = await page.evaluate(async ({ fx, url }) => {
         if (x < left) left = x; if (x > right) right = x;
       }
     }
+    // 마스크가 사람 밖으로 얼마나 나갔는지. 밖은 흰 배경뿐이라 모델이 참고할
+    // 것이 없고, 거기에 "옷을 그려라"라고 시키면 죽을 그린다.
+    const t2 = document.createElement('canvas');
+    t2.width = body.w; t2.height = body.h;
+    const tx2 = t2.getContext('2d', { willReadFrequently: true });
+    tx2.drawImage(mc, 0, 0, body.w, body.h);
+    const d2 = tx2.getImageData(0, 0, body.w, body.h).data;
+    let wht = 0, outside = 0;
+    for (let i = 0; i < body.w * body.h; i++) {
+      if (d2[i * 4] > 128) { wht++; if (!body.mask[i]) outside++; }
+    }
+    maskOutside = +(100 * outside / Math.max(1, wht)).toFixed(1);
     maskInfo = mc.width + 'x' + mc.height + ' 흰영역 ' +
       (white / (mc.width * mc.height) * 100).toFixed(1) + '% · y' + top + '~' + bot +
       ' x' + left + '~' + right;
@@ -124,12 +136,16 @@ const r = await page.evaluate(async ({ fx, url }) => {
   }
   return { ok: res.ok, ko: res.ko || null, len: res.dataUrl ? res.dataUrl.length : 0,
            mock: !!res.mock, prog,
-           quota: res.quota || null, stages, ms: res.ms, maskSent, maskInfo, maskPng };
+           quota: res.quota || null, stages, ms: res.ms, maskSent, maskInfo, maskPng, maskOutside };
 }, { fx, url: `http://127.0.0.1:${PORT_PROXY}` });
 
 check(r.ok === true, '합성 성공', r.ko || (Math.round(r.len / 1024) + 'KB · ' + r.ms + 'ms'));
 check(r.maskSent, '옷 자리 마스크를 함께 보냄 (Detectron2 불필요)',
   r.maskInfo ? r.maskInfo : '');
+/* 실루엣 밖으로 크게 새면 모델이 배경에 죽을 그린다. 실제로 그렇게 나왔다 —
+ * 팔 바깥의 날개 같은 덩어리, 종아리의 엉뚱한 무늬가 전부 이것이었다. */
+check(r.maskOutside != null && r.maskOutside < 25, '마스크가 사람 밖으로 새지 않음',
+  r.maskOutside + '% 바깥');
 check(r.quota && r.quota.left === 4, '한도가 1 줄어듦', r.quota ? r.quota.left + '/5' : '없음');
 check(r.stages.length >= 2, '진행 단계를 알려줌', r.stages.join(' → '));
 /* 모의 결과가 성공처럼 보이면 안 된다. 실제로 그렇게 보여서, 배선 문제를

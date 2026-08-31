@@ -241,9 +241,14 @@ def run_model(person_png: bytes, garment_png: bytes, category: str,
     #
     # 384×512 로 낮추면 토큰이 1/4, 어텐션은 1/16 이 된다. 학습 해상도보다
     # 낮아 디테일은 줄지만, 18GB 를 요구하다 죽는 것보다는 낫다.
+    #
+    # 다만 너무 낮추면 이번엔 **질감이 무너진다.** 확산 모델은 학습 해상도
+    # (768x1024) 아래에서 무늬를 뭉개고 엉뚱한 형상을 만들어 낸다. 384x512 로
+    # 낮췄더니 옷이 죽처럼 나왔다. 16GB 맥에서 감당되면서 학습값에 가장 가까운
+    # 값이 512x704(약 4.2GiB)다. 부족하면 VTON_WIDTH/HEIGHT 로 낮춘다.
     _mps = (m['device'] == 'mps')
-    W = int(os.environ.get('VTON_WIDTH', '384' if _mps else '768'))
-    H = int(os.environ.get('VTON_HEIGHT', '512' if _mps else '1024'))
+    W = int(os.environ.get('VTON_WIDTH', '512' if _mps else '768'))
+    H = int(os.environ.get('VTON_HEIGHT', '704' if _mps else '1024'))
 
     person = _flatten_on_white(person_png)
     cloth = _flatten_on_white(garment_png) if garment_png else None
@@ -283,6 +288,22 @@ def run_model(person_png: bytes, garment_png: bytes, category: str,
 
     seed = int(os.environ.get('VTON_SEED', '555'))
     generator = torch.Generator(device=m['device']).manual_seed(seed) if seed >= 0 else None
+
+    # 무엇이 들어왔는지 눈으로 볼 수 있게 남긴다 (VTON_DEBUG=1 일 때만).
+    #
+    # 결과가 이상할 때 원인은 셋 중 하나다 — 인물, 옷, 마스크. 셋은 고치는
+    # 곳이 전부 다르고, 결과 이미지만 보고는 구분할 수 없다. 기본은 꺼 둔다:
+    # 사장님 사진(전시라면 관람객 사진)을 디스크에 남기는 일이기 때문이다.
+    if os.environ.get('VTON_DEBUG', '0') == '1':
+        try:
+            d = os.environ.get('VTON_DEBUG_DIR', 'vton-debug')
+            os.makedirs(d, exist_ok=True)
+            person.save(os.path.join(d, 'in-person.png'))
+            cloth.save(os.path.join(d, 'in-garment.png'))
+            mask.save(os.path.join(d, 'in-mask.png'))
+            print('  입력을 %s/ 에 남겼습니다' % d)
+        except Exception as e:
+            print('  입력 남기기 실패(무시): %s' % e)
 
     # 브라우저가 진행률을 물어볼 수 있게 상태를 열어 둔다
     _progress.update({'running': True, 'step': 0, 'total': steps,
