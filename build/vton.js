@@ -37,7 +37,10 @@
   var LS_KEY = 'pc.vton.endpoint';
   var LS_OK = 'pc.vton.consent';
   var LS_CID = 'pc.vton.cid';
-  var TIMEOUT_MS = 90000;      // 확산 모델은 느리다. 10초로 끊으면 늘 실패한다.
+  /* 확산 모델은 느리다. 얼마나 느린지를 과소평가했다 — 90초로 두었더니
+   * 맥 GPU 에서는 서버가 열심히 그리는 중에 브라우저가 먼저 손을 놓았고,
+   * 화면에는 502 만 남았다. 맥에서 한 벌에 1~3분이 정상이다. */
+  var TIMEOUT_MS = 900000;     // 15분
 
   var _cache = null;           // IndexedDB 핸들
   var _mem = {};               // 세션 안에서는 메모리로 충분하다
@@ -371,7 +374,7 @@
     if (signal && ctrl) {
       signal.addEventListener('abort', function () { ctrl.abort(); });
     }
-    stage('합성 중');
+    stage('합성 중 (1~3분 걸립니다)');
     return fetch(url.replace(/\/+$/, '') + '/compose', {
       method: 'POST', body: fd,
       headers: { 'X-Client-Id': clientId() },

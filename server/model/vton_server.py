@@ -52,7 +52,10 @@ import socketserver
 MODE = os.environ.get('VTON_MODE', 'mock').lower()
 PORT = int(os.environ.get('PORT', '8788'))
 MODEL_NAME = os.environ.get('VTON_MODEL_NAME', 'catvton')
-STEPS = int(os.environ.get('VTON_STEPS', '30'))
+# 확산 단계 수. 많을수록 좋아지지만 시간은 그만큼 는다.
+# 맥 GPU(mps)에서는 한 단계가 CUDA 보다 훨씬 느려서, 30 단계면 몇 분이 된다.
+# 전시장에서 관람객이 3분을 서서 기다리지는 않는다. 장치를 보고 정한다.
+STEPS = int(os.environ.get('VTON_STEPS', '0'))   # 0 = 장치 보고 자동
 MAX_BODY = 24 * 1024 * 1024
 
 _model = None
@@ -209,6 +212,10 @@ def run_model(person_png: bytes, garment_png: bytes, category: str,
             'VTON_AUTOMASK=1 로 자동 생성을 켜 주세요(Detectron2·DensePose 필요).')
     mask = m['mask_processor'].blur(mask, blur_factor=9)
 
+    # 맥 GPU 는 한 단계가 느리다. 30 단계면 몇 분, 관람객은 그만큼 기다리지
+    # 않는다. 20 단계에서 눈에 띄는 품질 차이는 거의 없다. cuda 는 빠르니 30.
+    steps = STEPS or (20 if m['device'] == 'mps' else 30)
+
     seed = int(os.environ.get('VTON_SEED', '555'))
     generator = torch.Generator(device=m['device']).manual_seed(seed) if seed >= 0 else None
 
@@ -216,7 +223,7 @@ def run_model(person_png: bytes, garment_png: bytes, category: str,
         image=person,
         condition_image=cloth,
         mask=mask,
-        num_inference_steps=STEPS,
+        num_inference_steps=steps,
         guidance_scale=float(os.environ.get('VTON_GUIDANCE', '2.5')),
         generator=generator,
     )[0]

@@ -305,6 +305,17 @@ const server = http.createServer(async (req, res) => {
      * 남은 횟수가 줄어드는 것은 사용자에게 설명할 수 없다. */
     counters.set('cid:' + cidHash, Math.max(0, (counters.get('cid:' + cidHash) || 1) - 1));
     counters.set('ip:' + ipHash, Math.max(0, (counters.get('ip:' + ipHash) || 1) - 1));
+    /* Node 의 fetch 는 응답 헤더를 5분까지만 기다린다(undici 기본값). 모델
+     * 서버는 그림을 다 그린 뒤에야 헤더를 보내므로, 느린 장비에서는 서버가
+     * 멀쩡히 작업 중인데 여기서 먼저 끊긴다. 그때 "fetch failed" 만 남으면
+     * 원인을 알 길이 없으므로, 무엇을 하면 되는지까지 적어 보낸다. */
+    const cause = e && e.cause ? String(e.cause.code || e.cause.message || '') : '';
+    if (/HEADERS_TIMEOUT|BODY_TIMEOUT/i.test(cause)) {
+      console.error('✗ 모델 서버가 5분 안에 끝내지 못했습니다.');
+      return json(res, 504, { ok: false, ko:
+        '합성이 5분을 넘겨 중계 서버가 기다리기를 멈췄습니다. 모델 서버는 아직 그리는 중일 수 있습니다. ' +
+        'VTON_STEPS=12 처럼 단계를 줄여 다시 켜면 빨라집니다.' });
+    }
     console.error('✗ 합성 실패:', e && e.message ? e.message : e);
     return json(res, 502, { ok: false, ko: String(e.message || e) });
   }
