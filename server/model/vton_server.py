@@ -116,7 +116,9 @@ def load_model():
         attn_ckpt=repo_path,
         attn_ckpt_version='mix',
         weight_dtype=init_weight_dtype(precision),
-        use_tf32=True,
+        # TF32 는 NVIDIA 전용 기능이다. 맥에서 켜 두면 좋게 봐줘야 무시,
+        # 나쁘면 파이프라인 초기화에서 죽는다. 장치에 맞춰서만 켠다.
+        use_tf32=(device == 'cuda'),
         device=device,
     )
     # 옷이 놓일 자리 마스크. 브라우저가 만들어 보내 주면 여기서는 필요 없다 —
