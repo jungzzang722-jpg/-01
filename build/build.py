@@ -325,7 +325,35 @@ must("""        REPORT.mountFullReport(el, b.dx, bodyOk, state.rec, b.feat, stat
 """        REPORT.mountFullReport(el, b.dx, bodyOk, state.rec, b.feat, state.opts.goal,
           state.full ? state.full.img : null, state.full || null);""", 'report-mv')
 
-out = ROOT / '퍼스널컬러진단.html'
+# ── 5. 두 벌을 낸다 ──────────────────────────────────────────────────────
+#
+# 원본은 **네트워크 코드가 한 줄도 없는 채로** 남는다. 사이드바의 방패와
+# "이 브라우저 밖으로 나가지 않습니다"가 그 파일에서는 무조건 참이어야 한다.
+# 고화질 합성은 사진을 밖으로 보내는 기능이므로 같은 파일에 둘 수 없다.
+#
+# 대신 엔진 수정이 양쪽에 자동으로 반영되도록 여기서 함께 만든다.
+# 두 파일을 따로 손으로 관리하면 한쪽만 고쳐지는 것은 시간문제다.
 
+out = ROOT / '퍼스널컬러진단.html'
 out.write_text(s, encoding='utf-8')
 print(f"built {out.name}  ({len(s.encode('utf-8')) / 1024:.0f} KB)")
+
+# ── 고화질판 : 원본 + VTON 모듈 ─────────────────────────────────────────
+hq = s
+
+A_VTON = "<script>\n/* =========================================================================\n * fitroom.js"
+if A_VTON in hq:
+    hq = hq.replace(
+        A_VTON,
+        "<script>\n" + (B / 'vton.js').read_text(encoding='utf-8').rstrip() + "\n</script>\n" + A_VTON,
+        1)
+else:
+    sys.exit("build failed [vton]: fitroom.js anchor not found")
+
+# 제목과 표기를 바꿔 두 파일을 눈으로 구별할 수 있게 한다
+hq = hq.replace('<title>퍼스널 컬러 & 코디 진단</title>',
+                '<title>퍼스널 컬러 &amp; 코디 진단 — 고화질 합성판</title>', 1)
+
+outHQ = ROOT / '퍼스널컬러진단_고화질합성.html'
+outHQ.write_text(hq, encoding='utf-8')
+print(f"built {outHQ.name}  ({len(hq.encode('utf-8')) / 1024:.0f} KB)")

@@ -15217,7 +15217,24 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     ctx.textAlign = 'left';
   }
 
-  global.FITROOM = { mount: mount, panelHTML: panelHTML, mvPanel: mvPanel };
+  /**
+   * 지금 화면에 무엇이 그려져 있는가.
+   *
+   * 고화질 합성 모듈이 같은 몸·같은 옷으로 다시 만들려면 이 값이 필요하다.
+   * 그쪽에서 상태를 따로 들고 있게 하면 두 벌이 어긋나는 것은 시간문제라,
+   * 여기서 하나만 내보낸다. (원본 파일에는 그 모듈이 없으므로 이 함수는
+   * 쓰이지 않은 채 남는다 — 네트워크 코드는 한 줄도 늘지 않는다.) */
+  function snapshot() {
+    if (!S || !S.body) return null;
+    return {
+      body: S.body,
+      layers: layerOrder(),
+      canvas: S.root ? S.root.querySelector('#fitCanvas') : null,
+      view: S.views ? S.views[S.viewIdx] : null
+    };
+  }
+
+  global.FITROOM = { mount: mount, panelHTML: panelHTML, mvPanel: mvPanel, snapshot: snapshot };
 })(window);
 </script>
 <script>
