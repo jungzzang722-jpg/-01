@@ -63,6 +63,20 @@ _model = None
 # 전시장에서 서버가 아예 안 뜨면 확인할 방법이 없다.
 _load_error = None
 
+# 진행 상태 — 브라우저가 "몇 %" 를 보여줄 수 있게 하는 유일한 근거.
+#
+# 확산 모델은 한 벌에 1~3분이 걸린다. 그동안 화면에 아무 변화가 없으면
+# 사용자는 멈춘 것으로 읽고 새로고침한다(그러면 진짜로 처음부터 다시 한다).
+# 서버 창의 tqdm 막대는 우리만 본다 — 그 숫자를 밖으로 낼 통로가 필요하다.
+_progress = {'running': False, 'step': 0, 'total': 0, 'started': 0.0, 'ko': ''}
+
+# 요청마다 마스크가 실제로 왔는지 센다.
+#
+# 옷을 두 벌 고르면 두 번째 요청에 마스크가 안 왔던 적이 있다(중계가 첫 겹에만
+# 보냈다). 모의 모드는 마스크가 없어도 그냥 성공하므로 테스트가 못 잡았다.
+# 이 숫자가 있으면 "겹마다 마스크가 왔는가"를 모의 모드에서도 검증할 수 있다.
+_stats = {'requests': 0, 'with_mask': 0}
+
 
 # ─────────────────────────────────────────────────────────────────────────
 # 모델 — 여기 두 함수만 채우면 된다
@@ -151,6 +165,25 @@ def load_model():
         vae_scale_factor=8, do_normalize=False,
         do_binarize=True, do_convert_grayscale=True,
     )
+
+    # 단계를 세는 방법: 스케줄러의 step() 을 감싼다.
+    #
+    # CatVTONPipeline 은 콜백 인자를 받지 않고 tqdm 막대만 그린다. 확산 루프는
+    # 단계마다 noise_scheduler.step() 을 **정확히 한 번** 부르므로, 그것을
+    # 감싸면 파이프라인 코드를 건드리지 않고도 진행을 셀 수 있다.
+    # 저장소가 업데이트돼 루프가 바뀌어도 이 지점은 잘 안 바뀐다.
+    try:
+        _sched = pipeline.noise_scheduler
+        _orig_step = _sched.step
+
+        def _counting_step(*a, **kw):
+            _progress['step'] += 1
+            return _orig_step(*a, **kw)
+
+        _sched.step = _counting_step
+        print('  진행률 보고 켬')
+    except Exception as e:
+        print('  진행률 보고 못 켬(무시): %s' % e)
 
     _model = {
         'pipeline': pipeline, 'automasker': automasker,
@@ -251,21 +284,27 @@ def run_model(person_png: bytes, garment_png: bytes, category: str,
     seed = int(os.environ.get('VTON_SEED', '555'))
     generator = torch.Generator(device=m['device']).manual_seed(seed) if seed >= 0 else None
 
-    result = m['pipeline'](
-        image=person,
-        condition_image=cloth,
-        mask=mask,
-        # height/width 를 **반드시** 넘겨야 한다.
-        #
-        # 안 넘기면 파이프라인이 자기 기본값(1024x768)을 쓰고, check_inputs 가
-        # 우리가 줄여 보낸 이미지를 그 크기로 **도로 늘린다.** 이미지만 작게
-        # 만들어 넘기던 동안에는 아무리 줄여도 18GB 가 그대로였다.
-        height=H,
-        width=W,
-        num_inference_steps=steps,
-        guidance_scale=float(os.environ.get('VTON_GUIDANCE', '2.5')),
-        generator=generator,
-    )[0]
+    # 브라우저가 진행률을 물어볼 수 있게 상태를 열어 둔다
+    _progress.update({'running': True, 'step': 0, 'total': steps,
+                      'started': time.time(), 'ko': '옷을 그리는 중'})
+    try:
+        result = m['pipeline'](
+            image=person,
+            condition_image=cloth,
+            mask=mask,
+            # height/width 를 **반드시** 넘겨야 한다.
+            #
+            # 안 넘기면 파이프라인이 자기 기본값(1024x768)을 쓰고, check_inputs 가
+            # 우리가 줄여 보낸 이미지를 그 크기로 **도로 늘린다.** 이미지만 작게
+            # 만들어 넘기던 동안에는 아무리 줄여도 18GB 가 그대로였다.
+            height=H,
+            width=W,
+            num_inference_steps=steps,
+            guidance_scale=float(os.environ.get('VTON_GUIDANCE', '2.5')),
+            generator=generator,
+        )[0]
+    finally:
+        _progress['running'] = False
 
     buf = io.BytesIO()
     result.save(buf, format='PNG')
@@ -284,7 +323,17 @@ def run_mock(person_png: bytes, garment_png: bytes, category: str,
     도는지 확인할 수 있다. 모델을 붙인 뒤 문제가 생기면 "배선은 이미 됐었다"는
     사실이 원인을 절반으로 좁혀 준다.
     """
-    time.sleep(float(os.environ.get('VTON_MOCK_DELAY', '0.3')))   # 지연을 흉내 낸다
+    # 진행률 UI 를 GPU 없이도 검증할 수 있어야 한다. 실제와 같은 모양으로 센다.
+    total = 20
+    delay = float(os.environ.get('VTON_MOCK_DELAY', '0.3'))
+    _progress.update({'running': True, 'step': 0, 'total': total,
+                      'started': time.time(), 'ko': '옷을 그리는 중(모의)'})
+    try:
+        for i in range(total):
+            time.sleep(delay / total)
+            _progress['step'] = i + 1
+    finally:
+        _progress['running'] = False
 
     # 결과에 "모의"라고 써 둔다.
     #
@@ -370,7 +419,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 'ok': True, 'mode': MODE, 'model': MODEL_NAME,
                 'loaded': _model is not None, 'error': _load_error,
                 'automask': os.environ.get('VTON_AUTOMASK', '0') == '1',
+                'stats': dict(_stats),
                 'ko': ko
+            })
+        if self.path.split('?')[0] == '/progress':
+            p = dict(_progress)
+            el = (time.time() - p['started']) if p['started'] else 0
+            done = p['step']
+            tot = p['total'] or 0
+            # 남은 시간은 지금까지 걸린 단계당 시간으로 낸다. 첫 단계는 예열
+            # 때문에 유독 느리므로, 한 단계도 안 끝났으면 추정하지 않는다.
+            eta = ((el / done) * (tot - done)) if (done > 0 and tot > done) else None
+            return self._json(200, {
+                'ok': True, 'running': p['running'],
+                'step': done, 'total': tot,
+                'percent': round(100.0 * done / tot, 1) if tot else 0,
+                'elapsed': round(el, 1),
+                'eta': round(eta, 1) if eta is not None else None,
+                'ko': p['ko'] if p['running'] else '',
             })
         return self._json(404, {'ok': False, 'ko': '없는 경로입니다.'})
 
@@ -398,6 +464,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         if not person:
             return self._json(400, {'ok': False, 'ko': '인물 이미지가 없습니다.'})
+
+        _stats['requests'] += 1
+        if mask:
+            _stats['with_mask'] += 1
 
         t0 = time.time()
         try:

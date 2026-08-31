@@ -227,6 +227,26 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
+  /* 진행률 — 모델 서버가 세고 있는 단계를 그대로 넘겨준다.
+   *
+   * 브라우저는 모델 서버에 직접 붙지 않는다(주소를 하나만 알면 되도록 했고,
+   * CORS 도 여기서만 열어 두었다). 그래서 이 창구가 필요하다.
+   * 한도는 세지 않는다 — 폴링일 뿐 합성이 아니다. */
+  if (req.url && req.url.split('?')[0] === '/progress') {
+    if (PROVIDER !== 'custom' || !ENDPOINT) {
+      return json(res, 200, { ok: true, running: false, unsupported: true });
+    }
+    try {
+      const u = ENDPOINT.replace(/\/tryon\/?$/, '') + '/progress';
+      const r = await fetch(u, { signal: AbortSignal.timeout(2500) });
+      const j = await r.json();
+      return json(res, 200, j);
+    } catch (e) {
+      // 진행률을 못 읽는 것은 합성 실패가 아니다. 조용히 "모름"으로 답한다.
+      return json(res, 200, { ok: true, running: false, unavailable: true });
+    }
+  }
+
   if (req.method !== 'POST' || req.url !== '/compose') {
     return json(res, 404, { ok: false, ko: '없는 경로입니다.' });
   }
@@ -291,10 +311,16 @@ const server = http.createServer(async (req, res) => {
   try {
     for (const job of jobs) {
       const g = parts.find((p) => p.name === 'garment' + job.index);
-      /* 마스크는 **첫 겹에만** 쓴다. 두 번째 겹부터는 인물이 이미 첫 옷을
-       * 입고 있으므로 처음의 마스크가 맞지 않는다 — 그 자리는 모델이
-       * 스스로 판단하게 두는 편이 낫다. */
-      const m = (job.index === jobs[0].index && maskPart) ? maskPart.data : null;
+      /* 옷마다 자기 마스크를 쓴다(mask0, mask1, …).
+       *
+       * 예전에는 마스크 하나를 첫 겹에만 쓰고 나머지는 null 로 넘겼다.
+       * "두 번째 겹부터는 인물이 이미 첫 옷을 입고 있으니 처음 마스크가 안
+       * 맞는다"는 이유였는데, CatVTON 은 마스크 없이는 아예 돌지 않는다 —
+       * 옷을 두 벌 고르면 두 번째에서 "마스크가 없습니다"로 반드시 죽었다.
+       * 옛 클라이언트가 보내는 통짜 'mask' 는 첫 겹에 한해 받아 준다. */
+      const per = parts.find((p) => p.name === 'mask' + job.index);
+      const m = per ? per.data
+        : (job.index === jobs[0].index && maskPart) ? maskPart.data : null;
       /* 공급자는 Buffer 또는 { png, mock } 을 돌려준다 */
       const out = await impl(current, g ? g.data : null, job, m);
       if (out && out.png) { current = out.png; if (out.mock) mock = true; }

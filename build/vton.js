@@ -143,6 +143,9 @@
    * 마스크 규약: 흰색 = 다시 그릴 자리, 검정 = 그대로 둘 자리.
    */
   function maskPayload(body, layers, maxSide) {
+    /* layers 는 배열이지만, **한 벌씩** 넘기는 것이 맞다.
+     * 여러 벌을 합쳐 하나로 만들면 상의를 그릴 때 하의 자리까지 다시 그리라고
+     * 시키는 셈이 된다. compose 는 옷마다 따로 부른다. */
     if (!global.TRYON || !TRYON.coverageOf || !TRYON.bodyAnchors) return null;
     var w = body.w, h = body.h;
     var tmp = document.createElement('canvas');
@@ -310,6 +313,7 @@
       return Promise.resolve({ ok: false, ko: '입힐 옷이 없습니다.' });
     }
 
+    /* onStage(단계이름, 진행정보?) — 진행정보는 있을 때만 온다 */
     var stage = opts.onStage || function () { };
     var t0 = (global.performance || Date).now();
     var personCv = personPayload(body, opts.maxSide || 1024);
@@ -321,12 +325,8 @@
       }
       stage('보내는 중');
       var fd = new FormData();
-      var maskCv = opts.sendMask === false ? null
-        : maskPayload(body, tops, opts.maxSide || 1024);
       return toBlob(personCv).then(function (pb) {
         fd.append('person', pb, 'person.png');
-        if (!maskCv) return null;
-        return toBlob(maskCv).then(function (mb) { fd.append('mask', mb, 'mask.png'); });
       }).then(function () {
         /* 여러 겹은 한 번에 보내지 않는다. 확산 모델은 옷 한 벌을 입히는
          * 것으로 학습돼 있어서, 여러 벌을 한 번에 주면 섞어 그린다.
@@ -338,14 +338,30 @@
           chain = chain.then(function () {
             var gc = garmentPayload(l.garmentId, opts.garmentMaxSide || 768);
             if (!gc) return;
+            /* 옷마다 **자기 마스크**를 만들어 함께 보낸다.
+             *
+             * 예전에는 전체를 합친 마스크 하나만 보내고, 서버가 그것을 첫 겹에만
+             * 썼다 — "두 번째 겹부터는 인물이 이미 첫 옷을 입고 있으니 처음
+             * 마스크가 안 맞는다"는 이유였다. 그 판단 자체는 맞지만, CatVTON 은
+             * 마스크 없이는 아예 돌지 않는다(자동 생성은 Detectron2 가 필요해서
+             * 껐다). 결국 옷을 두 벌 고르면 두 번째에서 반드시 죽었다.
+             *
+             * 옷마다 마스크를 따로 만들면 둘 다 해결된다. 각 옷의 자리는 몸의
+             * 기하에서 나오고, 몸은 첫 옷을 입혀도 바뀌지 않는다. */
+            var mc = opts.sendMask === false ? null
+              : maskPayload(body, [l], opts.maxSide || 1024);
+            var spec = global.GARMENTS && GARMENTS.byId(l.garmentId);
             return toBlob(gc).then(function (gb) {
               fd.append('garment' + i, gb, 'garment' + i + '.png');
-              var spec = global.GARMENTS && GARMENTS.byId(l.garmentId);
               jobs.push({
                 index: i,
                 category: spec ? spec.cat : 'top',
                 ko: spec ? spec.ko : '',
                 colorHex: l.colorHex || null
+              });
+              if (!mc) return null;
+              return toBlob(mc).then(function (mb) {
+                fd.append('mask' + i, mb, 'mask' + i + '.png');
               });
             });
           });
@@ -375,12 +391,32 @@
       signal.addEventListener('abort', function () { ctrl.abort(); });
     }
     stage('합성 중 (1~3분 걸립니다)');
+
+    /* 진행률을 물어본다.
+     *
+     * 확산 모델은 한 벌에 1~3분이다. 그동안 화면이 그대로면 사용자는 멈춘
+     * 것으로 읽고 새로고침한다 — 그러면 정말 처음부터 다시 한다. 그래서
+     * "몇 단계 중 몇 번째"를 계속 보여준다. 실패해도 합성에는 영향이 없다. */
+    var poll = setInterval(function () {
+      fetch(url.replace(/\/+$/, '') + '/progress')
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j || !j.running || !j.total) return;
+          stage('합성 중', {
+            step: j.step, total: j.total,
+            percent: j.percent, eta: j.eta, elapsed: j.elapsed
+          });
+        })
+        .catch(function () { /* 진행률을 못 읽는 것은 실패가 아니다 */ });
+    }, 1500);
+    var stopPoll = function () { clearInterval(poll); };
+
     return fetch(url.replace(/\/+$/, '') + '/compose', {
       method: 'POST', body: fd,
       headers: { 'X-Client-Id': clientId() },
       signal: ctrl ? ctrl.signal : undefined
     }).then(function (res) {
-      clearTimeout(timer);
+      clearTimeout(timer); stopPoll();
       if (!res.ok) {
         return res.text().then(function (t) {
           /* 한도 초과는 서버가 남은 횟수까지 알고 있다. 그 말을 그대로 쓴다 —
@@ -403,7 +439,7 @@
       }
       return j;
     }).catch(function (e) {
-      clearTimeout(timer);
+      clearTimeout(timer); stopPoll();
       if (e && e.name === 'AbortError') {
         return { ok: false, ko: '시간이 너무 오래 걸려 중단했습니다. 잠시 후 다시 시도해 주세요.' };
       }
@@ -510,6 +546,14 @@
     '  border-radius:8px;border:0;box-shadow:0 0 0 .5px var(--separator);background:var(--bg)}',
     '.vt-state{font-size:12px;color:var(--label-2)}',
     '.vt-state.bad{color:var(--red)} .vt-state.good{color:var(--green)}',
+    /* 진행 막대 — 1~3분 동안 화면이 그대로면 사용자는 멈춘 줄 안다 */
+    '.vt-prog{display:none;margin-top:10px}',
+    '.vt-prog.on{display:block}',
+    '.vt-prog .bar{height:6px;border-radius:3px;background:var(--fill-3);overflow:hidden}',
+    '.vt-prog .bar>i{display:block;height:100%;width:0;border-radius:3px;',
+    '  background:var(--accent,#0a84ff);transition:width .4s ease}',
+    '.vt-prog .txt{margin-top:6px;font-size:12px;color:var(--label-2);',
+    '  font-variant-numeric:tabular-nums}',
     '.vt-out{margin-top:11px;display:none}',
     '.vt-out img{width:100%;border-radius:var(--r-box);display:block;background:var(--fill-3)}',
     '.vt-cmp{display:flex;gap:8px;margin-top:8px}',
@@ -547,6 +591,8 @@
       '  <button class="btn" id="vtRun" disabled>고화질로 합성</button>' +
       '  <button class="btn secondary" id="vtClear" style="font-size:12.5px">캐시 비우기</button>' +
       '  <span class="vt-state" id="vtRunState"></span>' +
+      '  <div class="vt-prog" id="vtProg"><div class="bar"><i id="vtProgBar"></i></div>' +
+      '    <div class="txt" id="vtProgTxt"></div></div>' +
       '</div>' +
       '<div class="vt-out" id="vtOut"><div class="vt-cmp">' +
       '  <figure><img id="vtLocal" alt="내장 엔진 결과"><figcaption>내장 엔진 · 즉시 · 사진이 나가지 않음</figcaption></figure>' +
@@ -581,6 +627,19 @@
     function setState(node, msg, cls) {
       node.textContent = msg || '';
       node.className = 'vt-state' + (cls ? ' ' + cls : '');
+    }
+
+    function showProg(on) {
+      var el = $('vtProg');
+      if (!el) return;
+      el.className = 'vt-prog' + (on ? ' on' : '');
+      if (!on) { $('vtProgBar').style.width = '0'; $('vtProgTxt').textContent = ''; }
+    }
+
+    function fmtSec(s) {
+      s = Math.max(0, Math.round(s));
+      if (s < 60) return s + '초';
+      return Math.floor(s / 60) + '분 ' + (s % 60) + '초';
     }
 
     function quotaText(q) {
@@ -624,10 +683,20 @@
       }
       out.style.display = 'block';
 
+      showProg(false);
       VTON.compose(snap.body, snap.layers, {
-        onStage: function (s) { setState(runState, s + '…'); }
+        onStage: function (s, p) {
+          setState(runState, s + '…');
+          if (!p || !p.total) return;
+          showProg(true);
+          $('vtProgBar').style.width = Math.min(100, p.percent || 0) + '%';
+          $('vtProgTxt').textContent =
+            (p.percent || 0).toFixed(0) + '%  ·  ' + p.step + '/' + p.total + ' 단계' +
+            (p.eta != null ? '  ·  약 ' + fmtSec(p.eta) + ' 남음' : '');
+        }
       }).then(function (r) {
         run.disabled = false;
+        showProg(false);
         refresh();
         if (!r.ok) {
           setState(runState, r.ko || '실패했습니다', 'bad');

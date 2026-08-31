@@ -48,7 +48,7 @@ async function waitUp(url, ms) {
 
 /* ── 모델 서버 (Python, 모의 모드) ─────────────────────────────────────── */
 const model = spawn('python3', ['server/model/vton_server.py'], {
-  env: { ...process.env, PORT: String(PORT_MODEL), VTON_MODE: 'mock', VTON_MOCK_DELAY: '0.1' },
+  env: { ...process.env, PORT: String(PORT_MODEL), VTON_MODE: 'mock', VTON_MOCK_DELAY: '4' },
   stdio: ['ignore', 'pipe', 'pipe']
 });
 model.stderr.on('data', (d) => console.log('  [model] ' + String(d).trim()));
@@ -96,10 +96,11 @@ const r = await page.evaluate(async ({ fx, url }) => {
   VTON.setEndpoint(url); VTON.setConsent(true);
   await VTON.clearCache();
   const stages = [];
+  const prog = [];
   const res = await VTON.compose(body, [
     { garmentId: 'b-straight-denim', colorHex: '#3A4A63' },
     { garmentId: 't-crew-cotton', colorHex: '#8B2D48' }
-  ], { onStage: (s) => stages.push(s) });
+  ], { onStage: (s, p) => { stages.push(s); if (p && p.total) prog.push(p); } });
   /* 마스크가 실제로 쓸 만한지 여기서 본다. 자리가 틀린 마스크는 없느니만
    * 못하다 — 모델이 엉뚱한 곳을 다시 그린다. */
   const mc = VTON.maskPayload(body, [
@@ -122,7 +123,7 @@ const r = await page.evaluate(async ({ fx, url }) => {
     maskPng = mc.toDataURL('image/png');
   }
   return { ok: res.ok, ko: res.ko || null, len: res.dataUrl ? res.dataUrl.length : 0,
-           mock: !!res.mock, cachedAfter: null,
+           mock: !!res.mock, prog,
            quota: res.quota || null, stages, ms: res.ms, maskSent, maskInfo, maskPng };
 }, { fx, url: `http://127.0.0.1:${PORT_PROXY}` });
 
@@ -134,6 +135,18 @@ check(r.stages.length >= 2, '진행 단계를 알려줌', r.stages.join(' → ')
 /* 모의 결과가 성공처럼 보이면 안 된다. 실제로 그렇게 보여서, 배선 문제를
  * 합성 품질 문제로 착각하고 한참을 엉뚱한 데서 찾았다. */
 check(r.mock === true, '모의 결과임을 브라우저까지 알려줌', 'mock=' + r.mock);
+
+/* 옷을 두 벌 고르면 두 번째 요청에 마스크가 안 갔다. CatVTON 은 마스크 없이는
+ * 돌지 않으므로 두 벌째는 반드시 죽었다. 겹마다 마스크가 가는지 센다. */
+const st = (await (await fetch(`http://127.0.0.1:${PORT_MODEL}/health`)).json()).stats;
+check(st && st.requests === 2, '두 벌을 한 벌씩 두 번 보냄', st ? st.requests + '회' : '?');
+check(st && st.with_mask === st.requests, '겹마다 자기 마스크를 함께 보냄',
+  st ? st.with_mask + '/' + st.requests : '?');
+
+/* 1~3분 동안 화면이 그대로면 사용자는 멈춘 줄 알고 새로고침한다 */
+check(r.prog && r.prog.length > 0, '합성 중 진행률을 받아옴',
+  r.prog && r.prog.length ? r.prog.length + '회 · 마지막 ' +
+    r.prog[r.prog.length - 1].step + '/' + r.prog[r.prog.length - 1].total : '없음');
 if (r.maskPng) {
   fs.writeFileSync('build/out/vton-mask.png', Buffer.from(r.maskPng.split(',')[1], 'base64'));
 }
