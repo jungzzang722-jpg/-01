@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+#
+# start.sh — 서버 두 개를 한 번에 띄운다.
+#
+# 전시 당일에 환경변수 이름을 외우고 있어야 하는 프로그램은,
+# 전시 당일에 안 돌아가는 프로그램이다. 그래서 전부 여기 적어 둔다.
+#
+#   ./server/start.sh          모의 모드 (모델 없이 배선만)
+#   ./server/start.sh real     실제 합성 (CatVTON 설치돼 있어야 함)
+#
+# 끄실 때는 Ctrl+C 한 번이면 둘 다 같이 꺼집니다.
+
+set -u
+cd "$(dirname "$0")/.."          # 어디서 실행하든 프로젝트 폴더에서 돈다
+
+MODE="${1:-mock}"
+MODEL_PORT="${MODEL_PORT:-8788}"
+RELAY_PORT="${RELAY_PORT:-8787}"
+
+PY="$(command -v python3 || true)"
+NODE="$(command -v node || true)"
+if [ -z "$PY" ];   then echo "✗ python3 이 없습니다. https://www.python.org 에서 설치해 주세요."; exit 1; fi
+if [ -z "$NODE" ]; then echo "✗ node 가 없습니다.  https://nodejs.org 에서 설치해 주세요.";      exit 1; fi
+
+# 이미 떠 있는 서버가 있으면 먼저 정리한다 — 포트가 물려 있으면
+# 새로 띄운 서버가 조용히 실패하고, 화면에는 아무 단서도 남지 않는다.
+for P in "$MODEL_PORT" "$RELAY_PORT"; do
+  PID="$(lsof -ti tcp:"$P" 2>/dev/null || true)"
+  if [ -n "$PID" ]; then echo "· 포트 $P 를 쓰던 것을 끕니다 (pid $PID)"; kill "$PID" 2>/dev/null || true; sleep 1; fi
+done
+
+PIDS=""
+DONE=0
+cleanup() { [ "$DONE" = 1 ] && return; DONE=1; echo; echo "· 서버를 끕니다"; for p in $PIDS; do kill "$p" 2>/dev/null || true; done; }
+trap cleanup EXIT INT TERM
+
+echo "· 모델 서버 (mode=$MODE, 포트 $MODEL_PORT)"
+VTON_MODE="$MODE" PORT="$MODEL_PORT" "$PY" server/model/vton_server.py &
+PIDS="$PIDS $!"
+
+echo "· 중계 서버 (포트 $RELAY_PORT)"
+VTON_PROVIDER=custom \
+VTON_ENDPOINT="http://127.0.0.1:$MODEL_PORT/tryon" \
+PORT="$RELAY_PORT" \
+"$NODE" server/vton-proxy.mjs &
+PIDS="$PIDS $!"
+
+# 뜰 때까지 기다렸다가 점검한다. 바로 doctor 를 돌리면 아직 안 떠서 실패한다.
+sleep 3
+echo
+"$NODE" server/doctor.mjs || true
+
+echo
+echo "──────────────────────────────────────────────"
+echo "  브라우저에서 열 파일:  퍼스널컬러진단_고화질합성.html"
+echo "  고화질 합성 서버 주소:  http://localhost:$RELAY_PORT"
+echo "  끄실 때: 이 창에서 Ctrl+C"
+echo "──────────────────────────────────────────────"
+
+wait

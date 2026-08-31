@@ -64,6 +64,21 @@ _load_error = None
 # ─────────────────────────────────────────────────────────────────────────
 # 모델 — 여기 두 함수만 채우면 된다
 # ─────────────────────────────────────────────────────────────────────────
+def _pick_device(torch):
+    """
+    어디서 돌릴지 스스로 고른다.
+
+    기본값을 cuda 로 두면 맥에서는 무조건 실패한다 — 맥에는 CUDA 가 없다.
+    사장님이 VTON_DEVICE 라는 환경변수를 알아야만 돌아가는 프로그램은
+    전시 당일에 안 돌아가는 프로그램이다.
+    """
+    if getattr(torch.backends, 'mps', None) and torch.backends.mps.is_available():
+        return 'mps'          # 애플 실리콘
+    if torch.cuda.is_available():
+        return 'cuda'
+    return 'cpu'              # 느리지만 돌기는 한다
+
+
 def load_model():
     """
     모델을 한 번만 올린다. 요청마다 올리면 매번 수십 초가 걸린다.
@@ -92,13 +107,15 @@ def load_model():
     from utils import init_weight_dtype
 
     repo_path = snapshot_download(repo_id=os.environ.get('VTON_REPO', 'zhengchong/CatVTON'))
-    device = os.environ.get('VTON_DEVICE', 'cuda')
+    device = os.environ.get('VTON_DEVICE', '') or _pick_device(torch)
+    precision = os.environ.get('VTON_PRECISION', '') or ('fp16' if device == 'mps' else 'bf16')
+    print('  장치 %s · 정밀도 %s' % (device, precision))
 
     pipeline = CatVTONPipeline(
         base_ckpt=os.environ.get('VTON_BASE', 'runwayml/stable-diffusion-inpainting'),
         attn_ckpt=repo_path,
         attn_ckpt_version='mix',
-        weight_dtype=init_weight_dtype(os.environ.get('VTON_PRECISION', 'bf16')),
+        weight_dtype=init_weight_dtype(precision),
         use_tf32=True,
         device=device,
     )
