@@ -237,7 +237,16 @@ def run_model(person_png: bytes, garment_png: bytes, category: str,
     # 맥 GPU 는 한 단계가 느리다. 30 단계면 몇 분, 관람객은 그만큼 기다리지
     # 않는다. 20 단계에서 눈에 띄는 품질 차이는 거의 없다. cuda 는 빠르니 30.
     steps = STEPS or (20 if _mps else 30)
-    print('  %dx%d · %d단계' % (W, H, steps))
+    # 어텐션이 실제로 얼마를 잡는지 미리 찍는다.
+    #
+    # 이 줄이 없어서, 이미지를 384x512 로 줄여 놓고도 파이프라인이 도로 1024x768
+    # 로 늘리고 있다는 걸 두 번의 OOM 뒤에야 알았다. 요구량을 눈으로 볼 수 있으면
+    # "줄였는데 왜 그대로지"를 즉시 안다.
+    #   토큰 = (W/8)x(H/8) 의 두 배 (인물+옷을 이어 붙이므로)
+    #   어텐션 = 토큰^2 x 8헤드 x 2(CFG) x 2바이트
+    _tok = 2 * (W // 8) * (H // 8)
+    _gib = (_tok * _tok * 8 * 2 * 2) / (1024 ** 3)
+    print('  %dx%d · %d단계 · 토큰 %d · 어텐션 %.1fGiB' % (W, H, steps, _tok, _gib))
 
     seed = int(os.environ.get('VTON_SEED', '555'))
     generator = torch.Generator(device=m['device']).manual_seed(seed) if seed >= 0 else None
@@ -246,6 +255,13 @@ def run_model(person_png: bytes, garment_png: bytes, category: str,
         image=person,
         condition_image=cloth,
         mask=mask,
+        # height/width 를 **반드시** 넘겨야 한다.
+        #
+        # 안 넘기면 파이프라인이 자기 기본값(1024x768)을 쓰고, check_inputs 가
+        # 우리가 줄여 보낸 이미지를 그 크기로 **도로 늘린다.** 이미지만 작게
+        # 만들어 넘기던 동안에는 아무리 줄여도 18GB 가 그대로였다.
+        height=H,
+        width=W,
         num_inference_steps=steps,
         guidance_scale=float(os.environ.get('VTON_GUIDANCE', '2.5')),
         generator=generator,
