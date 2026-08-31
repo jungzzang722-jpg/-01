@@ -2437,7 +2437,7 @@
     solveTPS: solveTPS, warpField: warpField, paletteFor: paletteFor,
     HEM_BODY: HEM_BODY, KEYS_TOP: KEYS_TOP, KEYS_BOTTOM: KEYS_BOTTOM,
     saneLM: saneLM, silhouetteLM: silhouetteLM, buildParts: buildParts, limbEdges: limbEdges,
-    coverageOf: coverageOf, coverFor: coverFor,
+    coverageOf: coverageOf, coverFor: coverFor, armInfo: armInfo,
     wrapU: wrapU, garmentHalfFn: garmentHalfFn, DEFAULT_DEPTH_RATIO: DEFAULT_DEPTH_RATIO,
     clearTintCache: function () { _tintCache = []; }
   };

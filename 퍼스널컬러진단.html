@@ -10626,7 +10626,7 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
     solveTPS: solveTPS, warpField: warpField, paletteFor: paletteFor,
     HEM_BODY: HEM_BODY, KEYS_TOP: KEYS_TOP, KEYS_BOTTOM: KEYS_BOTTOM,
     saneLM: saneLM, silhouetteLM: silhouetteLM, buildParts: buildParts, limbEdges: limbEdges,
-    coverageOf: coverageOf, coverFor: coverFor,
+    coverageOf: coverageOf, coverFor: coverFor, armInfo: armInfo,
     wrapU: wrapU, garmentHalfFn: garmentHalfFn, DEFAULT_DEPTH_RATIO: DEFAULT_DEPTH_RATIO,
     clearTintCache: function () { _tintCache = []; }
   };
@@ -14257,6 +14257,10 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
           '<div class="btn-row" style="margin-top:12px">' +
             '<button class="btn" id="fitClear">모두 벗기</button>' +
             '<button class="btn primary" id="fitSave">이미지로 저장</button>' +
+            /* 합성이 이상할 때 무엇이 잘못됐는지 알아내려면 랜드마크·대응점
+             * 수치가 필요하다. 사진은 브라우저 밖으로 나가지 않으므로 개발자가
+             * 직접 볼 수 없다 — 사용자가 숫자만 복사해 보낼 수 있게 한다. */
+            '<button class="btn" id="fitDiag" title="합성이 이상할 때 눌러 주세요">진단 정보 복사</button>' +
           '</div>' +
           '<div id="fitReport"></div>' +
         '</div>' +
@@ -14550,6 +14554,7 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       syncSelection(); recompose();
     });
     q('#fitSave').addEventListener('click', saveImage);
+    q('#fitDiag').addEventListener('click', copyDiagnostics);
 
     q('#fitImport').addEventListener('click', function () { q('#fitImportFile').click(); });
     q('#fitImportFile').addEventListener('change', function () {
@@ -14735,6 +14740,8 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
       if (res) {
         S.result = res.imageData;
         if (cur) cur.result = res.imageData;
+        // 진단 정보에서 다시 쓴다 — 합성을 한 번 더 돌리지 않기 위해서다
+        S.lastReport = res.report;
         renderReport(res.report);
         paint();
       }
@@ -15224,6 +15231,128 @@ table.tbl tbody tr:nth-child(even) { background: var(--fill-4); }
    * 그쪽에서 상태를 따로 들고 있게 하면 두 벌이 어긋나는 것은 시간문제라,
    * 여기서 하나만 내보낸다. (원본 파일에는 그 모듈이 없으므로 이 함수는
    * 쓰이지 않은 채 남는다 — 네트워크 코드는 한 줄도 늘지 않는다.) */
+  /**
+   * 합성이 왜 이상한지 알아낼 수 있는 수치를 한 덩어리로 뽑는다.
+   *
+   * 사진은 브라우저 밖으로 나가지 않으므로 개발자가 결과를 직접 볼 수 없다.
+   * 화면만 보고는 "소매가 손까지 덮는다"까지는 알아도 **왜** 그런지는 모른다 —
+   * 랜드마크가 틀렸는지, 소매 길이 판정이 틀렸는지, 덮개가 틀렸는지.
+   * 그 셋은 고치는 곳이 전부 다르다.
+   *
+   * 그래서 숫자만 복사할 수 있게 한다. 사진은 한 픽셀도 들어가지 않는다.
+   */
+  function diagnostics() {
+    if (!S || !S.body) return '피팅이 아직 준비되지 않았습니다.';
+    var b = S.body, L = TRYON.saneLM(b.lm);
+    var out = [];
+    function line(k, v) { out.push(k + ': ' + v); }
+    function pt(p) { return p ? '[' + Math.round(p[0]) + ',' + Math.round(p[1]) + ']' : '없음'; }
+
+    line('작업 크기', b.w + 'x' + b.h + '  scale ' + (b.scale || 1).toFixed(3));
+    line('랜드마크 출처', b.lmSource || '?');
+    line('분리', (b.seg && b.seg.from) || '?');
+    line('정수리/턱', Math.round(L.top) + ' / ' + Math.round(L.chinY));
+    line('어깨 y·폭', Math.round(L.shoulder.y) + ' · ' + Math.round(L.shoulder.w));
+    line('허리 y·폭', Math.round(L.waist.y) + ' · ' + Math.round(L.waist.w));
+    line('골반 y·폭', Math.round(L.hip.y) + ' · ' + Math.round(L.hip.w));
+    line('가랑이 / 바닥', Math.round(L.crotchY) + ' / ' + Math.round(L.bottom));
+
+    var arm = TRYON.armInfo ? TRYON.armInfo(b) : null;
+    if (arm) {
+      line('팔', '끝 y' + Math.round(arm.endY) + '  분리됨=' + arm.separated +
+        '  찾음=' + arm.found + '  해부학추정 y' + Math.round(arm.anatomicalWrist));
+    }
+
+    out.push('');
+    out.push('— 입은 옷 —');
+    var order = layerOrder();
+    if (!order.length) out.push('(없음)');
+    order.forEach(function (l) {
+      var spec = GARMENTS.byId(l.garmentId);
+      if (!spec) { out.push(l.garmentId + ' (정보 없음)'); return; }
+      out.push('[' + spec.cat + '] ' + spec.ko + '  id=' + spec.id +
+        '  소매=' + (spec.sleeve || '-') + '  기장=' + (spec.hem || '-') +
+        '  목=' + (spec.neck || '-') + '  fit=' + (spec.fit || 1) +
+        (spec.userPhoto ? '  (반입한 사진)' : ''));
+      var G = GARMENTS.get(l.garmentId);
+      if (!G) { out.push('   옷본 없음'); return; }
+      var A;
+      try { A = TRYON.bodyAnchors(b, spec, { ease: S.ease, lengthAdj: S.lengthAdj, shiftY: S.shiftY }, G); }
+      catch (e) { out.push('   대응점 오류: ' + e.message); return; }
+      if (!A) { out.push('   대응점 없음'); return; }
+      out.push('   목' + pt(A.neckL) + pt(A.neckR) + ' 어깨' + pt(A.shL) + pt(A.shR));
+      if (A.armL) out.push('   소맷부리' + pt(A.armL) + pt(A.armR) +
+        '  소매끝y=' + (A._sleeveEndY == null ? '-' : Math.round(A._sleeveEndY)));
+      if (A.waistL) out.push('   허리' + pt(A.waistL) + pt(A.waistR));
+      if (A.hemL) out.push('   밑단' + pt(A.hemL) + pt(A.hemR) + '  hemY=' + Math.round(A._hemY));
+      if (A.crotchC) out.push('   가랑이' + pt(A.crotchC));
+      try {
+        var cov = TRYON.coverageOf(b, spec, A, Math.round(Math.min(b.w, b.h) * 0.012), null);
+        ['torso', 'armL', 'armR', 'legL', 'legR'].forEach(function (k) {
+          var sp = cov && cov[k];
+          if (!sp) return;
+          var n = 0, y0 = 1e9, y1 = -1, wMax = 0;
+          for (var y = 0; y < b.h; y++) {
+            if (sp[y * 2] < 0) continue;
+            n++; if (y < y0) y0 = y; if (y > y1) y1 = y;
+            wMax = Math.max(wMax, sp[y * 2 + 1] - sp[y * 2]);
+          }
+          if (n) out.push('   덮개 ' + k + ': ' + n + '행 y' + y0 + '~' + y1 + ' 최대폭 ' + wMax);
+        });
+      } catch (e) { out.push('   덮개 오류: ' + e.message); }
+    });
+
+    if (S.lastReport) {
+      out.push('');
+      out.push('— 합성 결과 —');
+      (S.lastReport.layers || []).forEach(function (r) {
+        out.push(r.ko + ' ' + r.pixels + 'px' +
+          (r.recolor ? '  색오차 ΔE' + (r.recolor.hitDeltaE || 0).toFixed(1) +
+            ' 질감 ' + ((r.recolor.textureKeep || 0) * 100).toFixed(0) + '%' : ''));
+      });
+      if (S.lastReport.revealRatio != null) {
+        out.push('드러난 비율 ' + (S.lastReport.revealRatio * 100).toFixed(1) + '%');
+      }
+      (S.lastReport.warnings || []).forEach(function (w) { out.push('⚠ ' + w); });
+    }
+    return out.join('\n');
+  }
+
+  function copyDiagnostics() {
+    var txt = diagnostics();
+    var btn = S.root.querySelector('#fitDiag');
+    function done(ok) {
+      if (!btn) return;
+      var old = btn.textContent;
+      btn.textContent = ok ? '복사했습니다 — 붙여넣기 하세요' : '복사 실패 (아래 상자에서 직접 복사)';
+      setTimeout(function () { btn.textContent = old; }, 2600);
+    }
+    // 상자는 항상 띄운다 — 무엇을 보내는지 사장님이 눈으로 보고 보내야 한다
+    showDiag(txt);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(function () { done(true); }, function () { done(false); });
+    } else {
+      done(false);
+    }
+  }
+
+  /** 클립보드가 막힌 환경(file:// 등)에서는 직접 고를 수 있게 띄운다 */
+  function showDiag(txt) {
+    var box = S.root.querySelector('#fitReport');
+    if (!box) return;
+    var ta = box.querySelector('textarea.diag-text');
+    if (!ta) {
+      ta = document.createElement('textarea');
+      ta.className = 'diag-text';
+      ta.readOnly = true;
+      box.appendChild(ta);
+    }
+    ta.value = txt;
+    ta.style.cssText = 'width:100%;height:220px;margin-top:10px;font:11px/1.5 ui-monospace,monospace;' +
+      'border-radius:8px;padding:9px;box-shadow:0 0 0 .5px var(--separator);background:var(--bg);color:var(--fg)';
+    ta.select();
+  }
+
   function snapshot() {
     if (!S || !S.body) return null;
     return {
