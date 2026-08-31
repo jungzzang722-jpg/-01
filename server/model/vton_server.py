@@ -87,7 +87,6 @@ def load_model():
     import torch
     from diffusers.image_processor import VaeImageProcessor
     from huggingface_hub import snapshot_download
-    from model.cloth_masker import AutoMasker
     from model.pipeline import CatVTONPipeline
     from utils import init_weight_dtype
 
@@ -102,13 +101,17 @@ def load_model():
         use_tf32=True,
         device=device,
     )
-    # 옷이 놓일 자리를 알려주는 마스크를 만든다. 사람 파싱(SCHP)과
-    # 자세 추정(DensePose)이 여기 들어간다 — 설치 용량의 대부분이 이것이다.
-    automasker = AutoMasker(
-        densepose_ckpt=os.path.join(repo_path, 'DensePose'),
-        schp_ckpt=os.path.join(repo_path, 'SCHP'),
-        device=device,
-    )
+    # 옷이 놓일 자리 마스크. 브라우저가 만들어 보내 주면 여기서는 필요 없다 —
+    # 사람 파싱(SCHP)과 자세 추정(DensePose)이 설치의 대부분이고, 애플
+    # 실리콘에서는 GPU 가속조차 안 되는 부분이다. 그래서 **선택**으로 둔다.
+    automasker = None
+    if os.environ.get('VTON_AUTOMASK', '0') == '1':
+        from model.cloth_masker import AutoMasker
+        automasker = AutoMasker(
+            densepose_ckpt=os.path.join(repo_path, 'DensePose'),
+            schp_ckpt=os.path.join(repo_path, 'SCHP'),
+            device=device,
+        )
     mask_processor = VaeImageProcessor(
         vae_scale_factor=8, do_normalize=False,
         do_binarize=True, do_convert_grayscale=True,
@@ -140,7 +143,8 @@ def _flatten_on_white(png_bytes):
     return im.convert('RGB')
 
 
-def run_model(person_png: bytes, garment_png: bytes, category: str) -> bytes:
+def run_model(person_png: bytes, garment_png: bytes, category: str,
+              mask_png: bytes = None) -> bytes:
     """
     인물 PNG + 옷 PNG → 합성 PNG.
 
@@ -171,9 +175,18 @@ def run_model(person_png: bytes, garment_png: bytes, category: str) -> bytes:
     person = resize_and_crop(person, (W, H))
     cloth = resize_and_padding(cloth, (W, H))
 
-    # CatVTON 의 cloth_type 은 upper / lower / overall 이다
-    cloth_type = 'lower' if category == 'bottom' else 'upper'
-    mask = m['automasker'](person, cloth_type)['mask']
+    if mask_png:
+        # 브라우저가 보낸 마스크. 인물과 **같은 방식으로** 맞춰야 자리가 어긋나지
+        # 않는다 — 인물은 crop 했으므로 마스크도 crop 이다.
+        mask = _flatten_on_white(mask_png).convert('L')
+        mask = resize_and_crop(mask.convert('RGB'), (W, H)).convert('L')
+    elif m['automasker'] is not None:
+        cloth_type = 'lower' if category == 'bottom' else 'upper'
+        mask = m['automasker'](person, cloth_type)['mask']
+    else:
+        raise ValueError(
+            '마스크가 없습니다. 브라우저가 마스크를 함께 보내거나, '
+            'VTON_AUTOMASK=1 로 자동 생성을 켜 주세요(Detectron2·DensePose 필요).')
     mask = m['mask_processor'].blur(mask, blur_factor=9)
 
     seed = int(os.environ.get('VTON_SEED', '555'))
@@ -196,7 +209,8 @@ def run_model(person_png: bytes, garment_png: bytes, category: str) -> bytes:
 # ─────────────────────────────────────────────────────────────────────────
 # 모의 모드 — GPU 없이 배선을 검증한다
 # ─────────────────────────────────────────────────────────────────────────
-def run_mock(person_png: bytes, garment_png: bytes, category: str) -> bytes:
+def run_mock(person_png: bytes, garment_png: bytes, category: str,
+             mask_png: bytes = None) -> bytes:
     """
     실제 합성은 하지 않고 인물 이미지를 그대로 돌려준다.
 
@@ -268,7 +282,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 ko = '모델이 올라오지 않았습니다: %s' % (_load_error or '알 수 없음')
             return self._json(200, {
                 'ok': True, 'mode': MODE, 'model': MODEL_NAME,
-                'loaded': _model is not None, 'error': _load_error, 'ko': ko
+                'loaded': _model is not None, 'error': _load_error,
+                'automask': os.environ.get('VTON_AUTOMASK', '0') == '1',
+                'ko': ko
             })
         return self._json(404, {'ok': False, 'ko': '없는 경로입니다.'})
 
@@ -291,6 +307,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         person = parts.get('person')
         garment = parts.get('garment')
+        mask = parts.get('mask')
         category = (parts.get('category') or b'top').decode('utf-8', 'replace')
 
         if not person:
@@ -298,8 +315,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         t0 = time.time()
         try:
-            out = run_mock(person, garment, category) if MODE == 'mock' \
-                else run_model(person, garment, category)
+            out = run_mock(person, garment, category, mask) if MODE == 'mock' \
+                else run_model(person, garment, category, mask)
         except NotImplementedError as e:
             return self._json(501, {'ok': False, 'ko': str(e)})
         except ImportError as e:

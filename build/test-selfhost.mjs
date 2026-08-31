@@ -9,7 +9,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, execSync } from 'node:child_process';
 
 const PORT_MODEL = 8795, PORT_PROXY = 8796;
 let fail = 0;
@@ -19,14 +19,43 @@ const check = (ok, ko, extra) => {
 };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/* 이전 실행이 남긴 서버를 먼저 치운다.
+ * 테스트가 서버를 띄우는 이상 이건 필수다 — 안 하면 두 번째 실행부터
+ * "Address already in use" 로 막히고, 그 메시지만 보면 원인이 코드에 있는
+ * 것처럼 보인다. 실제로 여기서 두 번 헤맸다. */
+function freePorts(ports) {
+  for (const p of ports) {
+    try {
+      const out = execSync(`lsof -t -i:${p} 2>/dev/null || true`).toString().trim();
+      for (const pid of out.split('\n').filter(Boolean)) {
+        try { process.kill(Number(pid), 'SIGKILL'); } catch { }
+      }
+    } catch { }
+  }
+}
+freePorts([PORT_MODEL, PORT_PROXY, PORT_MODEL + 10]);
+await wait(300);
+
+/** 서버가 뜰 때까지 기다리되, 안 뜨면 매달리지 않는다 */
+async function waitUp(url, ms) {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    try { if ((await fetch(url)).ok) return true; } catch { }
+    await wait(200);
+  }
+  return false;
+}
+
 /* ── 모델 서버 (Python, 모의 모드) ─────────────────────────────────────── */
 const model = spawn('python3', ['server/model/vton_server.py'], {
   env: { ...process.env, PORT: String(PORT_MODEL), VTON_MODE: 'mock', VTON_MOCK_DELAY: '0.1' },
   stdio: ['ignore', 'pipe', 'pipe']
 });
 model.stderr.on('data', (d) => console.log('  [model] ' + String(d).trim()));
-await new Promise((r) => model.stdout.once('data', r));
-await wait(300);
+if (!await waitUp(`http://127.0.0.1:${PORT_MODEL}/health`, 15000)) {
+  console.log('  ✗ 모델 서버가 뜨지 않았습니다');
+  process.exit(1);
+}
 
 console.log('■ 모델 서버 (Python)');
 const mh = await (await fetch(`http://127.0.0.1:${PORT_MODEL}/health`)).json();
@@ -41,7 +70,10 @@ const proxy = spawn(process.execPath, ['server/vton-proxy.mjs'], {
   stdio: ['ignore', 'pipe', 'pipe']
 });
 proxy.stderr.on('data', (d) => console.log('  [proxy] ' + String(d).trim()));
-await new Promise((r) => proxy.stdout.once('data', r));
+if (!await waitUp(`http://127.0.0.1:${PORT_PROXY}/health`, 15000)) {
+  console.log('  ✗ 중계 서버가 뜨지 않았습니다');
+  process.exit(1);
+}
 
 console.log('\n■ 중계 서버 (Node)');
 const ph = await (await fetch(`http://127.0.0.1:${PORT_PROXY}/health`)).json();
@@ -68,13 +100,39 @@ const r = await page.evaluate(async ({ fx, url }) => {
     { garmentId: 'b-straight-denim', colorHex: '#3A4A63' },
     { garmentId: 't-crew-cotton', colorHex: '#8B2D48' }
   ], { onStage: (s) => stages.push(s) });
+  /* 마스크가 실제로 쓸 만한지 여기서 본다. 자리가 틀린 마스크는 없느니만
+   * 못하다 — 모델이 엉뚱한 곳을 다시 그린다. */
+  const mc = VTON.maskPayload(body, [
+    { garmentId: 'b-straight-denim' }, { garmentId: 't-crew-cotton' }], 1024);
+  let maskInfo = null, maskSent = false, maskPng = null;
+  if (mc) {
+    maskSent = true;
+    const md = mc.getContext('2d').getImageData(0, 0, mc.width, mc.height).data;
+    let white = 0, top = 1e9, bot = -1, left = 1e9, right = -1;
+    for (let y = 0; y < mc.height; y++) for (let x = 0; x < mc.width; x++) {
+      if (md[(y * mc.width + x) * 4] > 128) {
+        white++;
+        if (y < top) top = y; if (y > bot) bot = y;
+        if (x < left) left = x; if (x > right) right = x;
+      }
+    }
+    maskInfo = mc.width + 'x' + mc.height + ' 흰영역 ' +
+      (white / (mc.width * mc.height) * 100).toFixed(1) + '% · y' + top + '~' + bot +
+      ' x' + left + '~' + right;
+    maskPng = mc.toDataURL('image/png');
+  }
   return { ok: res.ok, ko: res.ko || null, len: res.dataUrl ? res.dataUrl.length : 0,
-           quota: res.quota || null, stages, ms: res.ms };
+           quota: res.quota || null, stages, ms: res.ms, maskSent, maskInfo, maskPng };
 }, { fx, url: `http://127.0.0.1:${PORT_PROXY}` });
 
 check(r.ok === true, '합성 성공', r.ko || (Math.round(r.len / 1024) + 'KB · ' + r.ms + 'ms'));
+check(r.maskSent, '옷 자리 마스크를 함께 보냄 (Detectron2 불필요)',
+  r.maskInfo ? r.maskInfo : '');
 check(r.quota && r.quota.left === 4, '한도가 1 줄어듦', r.quota ? r.quota.left + '/5' : '없음');
 check(r.stages.length >= 2, '진행 단계를 알려줌', r.stages.join(' → '));
+if (r.maskPng) {
+  fs.writeFileSync('build/out/vton-mask.png', Buffer.from(r.maskPng.split(',')[1], 'base64'));
+}
 
 /* ── 모델이 아직 없을 때 무슨 일이 생기는가 ──────────────────────────── */
 console.log('\n■ 모델을 아직 안 붙였을 때 (real 모드)');

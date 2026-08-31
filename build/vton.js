@@ -126,6 +126,77 @@
     return out;
   }
 
+  /**
+   * 옷이 놓일 자리 마스크 — **우리가 직접 만든다.**
+   *
+   * 확산 모델은 "여기에 옷을 그려라"를 마스크로 받는다. 보통은 사람 파싱
+   * (SCHP)과 자세 추정(DensePose)을 돌려 만드는데, 그 두 부품이 설치의
+   * 대부분이고 애플 실리콘에서는 GPU 가속조차 안 된다.
+   *
+   * 그런데 우리 앱은 그 계산을 **이미 하고 있다.** coverageOf 가 행마다
+   * "여기가 옷"을 정해 두었다(윤곽을 몸에서 만들기 위해 만든 것이다).
+   * 그걸 같이 보내면 모델 쪽에서 두 부품이 통째로 필요 없어진다.
+   *
+   * 마스크 규약: 흰색 = 다시 그릴 자리, 검정 = 그대로 둘 자리.
+   */
+  function maskPayload(body, layers, maxSide) {
+    if (!global.TRYON || !TRYON.coverageOf || !TRYON.bodyAnchors) return null;
+    var w = body.w, h = body.h;
+    var tmp = document.createElement('canvas');
+    tmp.width = w; tmp.height = h;
+    var tc = tmp.getContext('2d');
+    tc.fillStyle = '#000';
+    tc.fillRect(0, 0, w, h);
+    tc.fillStyle = '#fff';
+
+    var over = Math.round(Math.min(w, h) * 0.012);
+    var painted = 0;
+    for (var li = 0; li < layers.length; li++) {
+      var spec = global.GARMENTS && GARMENTS.byId(layers[li].garmentId);
+      var G = global.GARMENTS && GARMENTS.get(layers[li].garmentId);
+      if (!spec || !G) continue;
+      var A;
+      try { A = TRYON.bodyAnchors(body, spec, { ease: 1 }, G); } catch (e) { continue; }
+      if (!A) continue;
+      var cov;
+      try { cov = TRYON.coverageOf(body, spec, A, over, null); } catch (e) { continue; }
+      if (!cov) continue;
+      ['torso', 'armL', 'armR', 'legL', 'legR'].forEach(function (k) {
+        var sp = cov[k];
+        if (!sp) return;
+        for (var y = 0; y < h; y++) {
+          var a = sp[y * 2], b = sp[y * 2 + 1];
+          if (a < 0 || b < a) continue;
+          tc.fillRect(a, y, b - a + 1, 1);
+          painted++;
+        }
+      });
+    }
+    if (!painted) return null;
+
+    /* 가장자리를 조금 넓힌다. 마스크가 옷보다 좁으면 원래 옷이 삐져나오고,
+     * 조금 넓으면 모델이 알아서 피부를 그린다 — 한쪽 실수가 훨씬 싸다. */
+    var grow = Math.max(2, Math.round(Math.min(w, h) * 0.008));
+    tc.filter = 'blur(' + grow + 'px)';
+    tc.drawImage(tmp, 0, 0);
+    tc.filter = 'none';
+
+    var out = document.createElement('canvas');
+    var sc = Math.min(1, (maxSide || 1024) / Math.max(w, h));
+    out.width = Math.max(1, Math.round(w * sc));
+    out.height = Math.max(1, Math.round(h * sc));
+    var oc = out.getContext('2d');
+    oc.drawImage(tmp, 0, 0, out.width, out.height);
+    // 흐린 가장자리를 다시 이진화한다 — 모델은 회색을 애매하게 받아들인다
+    var im = oc.getImageData(0, 0, out.width, out.height), d = im.data;
+    for (var i = 0; i < d.length; i += 4) {
+      var v = d[i] > 96 ? 255 : 0;
+      d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+    }
+    oc.putImageData(im, 0, 0);
+    return out;
+  }
+
   /** 옷 이미지 — 반입한 사진이면 그 사진, 절차적 옷본이면 렌더 결과 */
   function garmentPayload(garmentId, maxSide) {
     var G = global.GARMENTS && GARMENTS.get(garmentId);
@@ -247,8 +318,13 @@
       }
       stage('보내는 중');
       var fd = new FormData();
+      var maskCv = opts.sendMask === false ? null
+        : maskPayload(body, tops, opts.maxSide || 1024);
       return toBlob(personCv).then(function (pb) {
         fd.append('person', pb, 'person.png');
+        if (!maskCv) return null;
+        return toBlob(maskCv).then(function (mb) { fd.append('mask', mb, 'mask.png'); });
+      }).then(function () {
         /* 여러 겹은 한 번에 보내지 않는다. 확산 모델은 옷 한 벌을 입히는
          * 것으로 학습돼 있어서, 여러 벌을 한 번에 주면 섞어 그린다.
          * 아래층부터 한 벌씩 순서대로 입히는 것은 서버가 맡는다 —
@@ -366,6 +442,7 @@
     consented: consented, setConsent: setConsent,
     compose: compose, ping: ping, clientId: clientId,
     personPayload: personPayload, garmentPayload: garmentPayload,
+    maskPayload: maskPayload,
     cacheKey: cacheKey, clearCache: clearCache,
     TIMEOUT_MS: TIMEOUT_MS
   };

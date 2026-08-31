@@ -114,7 +114,7 @@ function parseMultipart(buf, boundary) {
 const providers = {
   /* 범용 이미지 편집 모델. 접근이 쉽지만 옷 충실도가 약하다 —
    * 고른 그 옷이 아니라 비슷한 다른 옷을 그려낼 수 있다. */
-  async openai(person, garment, job) {
+  async openai(person, garment, job, mask) {
     if (!MODEL) throw new Error('VTON_MODEL 을 설정해 주세요 (공급자 문서에서 확인).');
     const fd = new FormData();
     fd.append('model', MODEL);
@@ -140,7 +140,7 @@ const providers = {
 
   /* 전용 가상 피팅 모델을 호스팅해 주는 곳. 이 작업만 학습돼 있어
    * 옷 충실도와 인물 보존이 범용 모델보다 낫다. */
-  async replicate(person, garment, job) {
+  async replicate(person, garment, job, mask) {
     if (!MODEL) throw new Error('VTON_MODEL(버전 해시)을 설정해 주세요.');
     const b64 = (b) => 'data:image/png;base64,' + b.toString('base64');
     const create = await fetch(ENDPOINT || 'https://api.replicate.com/v1/predictions', {
@@ -175,11 +175,15 @@ const providers = {
 
   /* 직접 띄운 모델(IDM-VTON 등). 장당 과금이 없고 사진이 밖으로 나가지
    * 않는다는 점에서 이 앱의 약속에 가장 가깝다. */
-  async custom(person, garment, job) {
+  async custom(person, garment, job, mask) {
     if (!ENDPOINT) throw new Error('VTON_ENDPOINT 를 설정해 주세요.');
     const fd = new FormData();
     fd.append('person', new Blob([person], { type: 'image/png' }), 'person.png');
     if (garment) fd.append('garment', new Blob([garment], { type: 'image/png' }), 'garment.png');
+    /* 옷이 놓일 자리 마스크를 브라우저가 함께 보낸다.
+     * 이게 있으면 모델 서버는 사람 파싱·자세 추정(Detectron2/DensePose)을
+     * 돌릴 필요가 없다 — 설치의 대부분이자 애플 실리콘에서 막히는 부분이다. */
+    if (mask) fd.append('mask', new Blob([mask], { type: 'image/png' }), 'mask.png');
     fd.append('category', job.category || 'top');
     const r = await fetch(ENDPOINT, {
       method: 'POST',
@@ -262,6 +266,7 @@ const server = http.createServer(async (req, res) => {
 
   const parts = parseMultipart(Buffer.concat(chunks), boundary);
   const person = parts.find((p) => p.name === 'person');
+  const maskPart = parts.find((p) => p.name === 'mask');
   const jobsPart = parts.find((p) => p.name === 'jobs');
   if (!person) return json(res, 400, { ok: false, ko: '인물 이미지가 없습니다.' });
 
@@ -282,7 +287,11 @@ const server = http.createServer(async (req, res) => {
   try {
     for (const job of jobs) {
       const g = parts.find((p) => p.name === 'garment' + job.index);
-      current = await impl(current, g ? g.data : null, job);
+      /* 마스크는 **첫 겹에만** 쓴다. 두 번째 겹부터는 인물이 이미 첫 옷을
+       * 입고 있으므로 처음의 마스크가 맞지 않는다 — 그 자리는 모델이
+       * 스스로 판단하게 두는 편이 낫다. */
+      const m = (job.index === jobs[0].index && maskPart) ? maskPart.data : null;
+      current = await impl(current, g ? g.data : null, job, m);
     }
   } catch (e) {
     /* 실패한 호출로 사용자의 횟수를 깎지 않는다. 우리 쪽 사정으로 실패했는데
