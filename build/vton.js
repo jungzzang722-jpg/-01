@@ -36,6 +36,7 @@
 
   var LS_KEY = 'pc.vton.endpoint';
   var LS_OK = 'pc.vton.consent';
+  var LS_CID = 'pc.vton.cid';
   var TIMEOUT_MS = 90000;      // 확산 모델은 느리다. 10초로 끊으면 늘 실패한다.
 
   var _cache = null;           // IndexedDB 핸들
@@ -54,6 +55,29 @@
     } catch (e) { /* 사생활 모드 — 이번 세션만 동작한다 */ }
   }
   function enabled() { return !!endpoint(); }
+
+  /**
+   * 이 브라우저를 가리키는 임의의 값.
+   *
+   * 로그인이 없으므로 "하루 몇 벌" 을 세려면 무언가로 구분해야 한다.
+   * 계정도 아니고 기기 지문도 아닌, 그냥 이 브라우저가 스스로 만든 난수다.
+   * 지우면 초기화된다 — 완벽한 통제 수단이 아니라 **비용 폭주를 막는 울타리**다.
+   * 정확한 과금이 필요해지면 그때 로그인을 붙이는 것이 순서다.
+   */
+  function clientId() {
+    try {
+      var v = localStorage.getItem(LS_CID);
+      if (!v) {
+        v = (global.crypto && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
+        localStorage.setItem(LS_CID, v);
+      }
+      return v;
+    } catch (e) {
+      return 'anon';   // 사생활 모드 — 서버는 IP 한도로 막는다
+    }
+  }
 
   function consented() {
     try { return localStorage.getItem(LS_OK) === '1'; } catch (e) { return false; }
@@ -269,18 +293,30 @@
     }
     stage('합성 중');
     return fetch(url.replace(/\/+$/, '') + '/compose', {
-      method: 'POST', body: fd, signal: ctrl ? ctrl.signal : undefined
+      method: 'POST', body: fd,
+      headers: { 'X-Client-Id': clientId() },
+      signal: ctrl ? ctrl.signal : undefined
     }).then(function (res) {
       clearTimeout(timer);
       if (!res.ok) {
         return res.text().then(function (t) {
+          /* 한도 초과는 서버가 남은 횟수까지 알고 있다. 그 말을 그대로 쓴다 —
+           * 여기서 다시 지어내면 서버가 아는 것보다 부정확해진다. */
+          var j = null;
+          try { j = JSON.parse(t); } catch (e) { }
+          if (j && j.quotaExceeded) {
+            return { ok: false, status: res.status, quotaExceeded: true,
+                     quota: j.quota || null, ko: j.ko };
+          }
           return { ok: false, status: res.status, ko: readableError(res.status, t) };
         });
       }
       return res.json();
     }).then(function (j) {
       if (!j || j.ok === false) return j || { ok: false, ko: '서버가 응답을 주지 않았습니다.' };
-      if (j.ok && j.image) return { ok: true, dataUrl: j.image, provider: j.provider || null };
+      if (j.ok && j.image) {
+        return { ok: true, dataUrl: j.image, provider: j.provider || null, quota: j.quota || null };
+      }
       return j;
     }).catch(function (e) {
       clearTimeout(timer);
@@ -317,7 +353,10 @@
     if (!u) return Promise.resolve({ ok: false, ko: '주소가 비어 있습니다.' });
     var ctrl = global.AbortController ? new AbortController() : null;
     var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 8000);
-    return fetch(u + '/health', { signal: ctrl ? ctrl.signal : undefined })
+    return fetch(u + '/health', {
+      headers: { 'X-Client-Id': clientId() },
+      signal: ctrl ? ctrl.signal : undefined
+    })
       .then(function (r) { clearTimeout(timer); return r.ok ? r.json() : { ok: false, ko: 'HTTP ' + r.status }; })
       .catch(function () { clearTimeout(timer); return { ok: false, ko: '연결하지 못했습니다.' }; });
   }
@@ -325,7 +364,7 @@
   global.VTON = {
     enabled: enabled, endpoint: endpoint, setEndpoint: setEndpoint,
     consented: consented, setConsent: setConsent,
-    compose: compose, ping: ping,
+    compose: compose, ping: ping, clientId: clientId,
     personPayload: personPayload, garmentPayload: garmentPayload,
     cacheKey: cacheKey, clearCache: clearCache,
     TIMEOUT_MS: TIMEOUT_MS
@@ -426,11 +465,20 @@
       node.className = 'vt-state' + (cls ? ' ' + cls : '');
     }
 
-    if (VTON.enabled()) {
-      VTON.ping().then(function (h) {
-        setState(state, h.ok ? '서버 연결됨 · ' + (h.ko || '') : '연결 실패', h.ok ? 'good' : 'bad');
-      });
+    function quotaText(q) {
+      if (!q) return '';
+      return ' · 오늘 남은 횟수 ' + q.left + '/' + q.perDay;
     }
+    function showHealth(h) {
+      setState(state,
+        h.ok ? '서버 연결됨 · ' + (h.ko || '') + quotaText(h.quota) : (h.ko || '연결 실패'),
+        h.ok ? 'good' : 'bad');
+      if (h.ok && h.quota && h.quota.left <= 0) {
+        run.disabled = true;
+        setState(runState, '오늘 횟수를 모두 썼습니다. 내장 엔진 합성은 계속 쓰실 수 있습니다.');
+      }
+    }
+    if (VTON.enabled()) VTON.ping().then(showHealth);
 
     save.onclick = function () {
       var v = url.value.trim();
@@ -438,10 +486,7 @@
       refresh();
       if (!v) return setState(state, '꺼짐');
       setState(state, '확인 중…');
-      VTON.ping(v).then(function (h) {
-        setState(state, h.ok ? '서버 연결됨 · ' + (h.ko || '') : (h.ko || '연결 실패'),
-          h.ok ? 'good' : 'bad');
-      });
+      VTON.ping(v).then(showHealth);
     };
     ok.onchange = function () { VTON.setConsent(ok.checked); refresh(); };
     $('vtClear').onclick = function () {
@@ -468,6 +513,7 @@
         refresh();
         if (!r.ok) {
           setState(runState, r.ko || '실패했습니다', 'bad');
+          if (r.quotaExceeded) { run.disabled = true; setState(state, '오늘 한도 소진', 'bad'); }
           $('vtRemote').removeAttribute('src');
           $('vtRemoteCap').textContent = '고화질 — 실패, 왼쪽 결과를 그대로 씁니다';
           return;
@@ -477,7 +523,8 @@
           ? '고화질 · 이전 결과 재사용(전송하지 않음)'
           : '고화질 · ' + (r.ms != null ? (r.ms / 1000).toFixed(1) + '초' : '') +
             (r.provider ? ' · ' + r.provider : '');
-        setState(runState, '완료', 'good');
+        setState(runState, '완료' + quotaText(r.quota), 'good');
+        if (r.quota && r.quota.left <= 0) run.disabled = true;
       });
     };
   }

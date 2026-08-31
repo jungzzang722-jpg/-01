@@ -33,6 +33,51 @@ const ALLOW_ORIGIN = process.env.ALLOW_ORIGIN || '*';
 
 const MAX_BODY = 24 * 1024 * 1024;   // 인물 1장 + 옷 몇 장이면 충분하다
 
+/* ── 사용 한도 ───────────────────────────────────────────────────────────
+ * 장당 과금이므로 상한이 없으면 비용이 무한이다. 한 사람이 하루에 몇 벌까지
+ * 볼 수 있는지를 정한다.
+ *
+ * 누가 누구인지는 로그인 없이 알 수 없으므로 두 가지로 센다.
+ *   · 클라이언트 ID — 브라우저가 만들어 보관하는 임의의 값. 지우면 초기화된다.
+ *   · IP — 그것을 막는 뒷받침. 다만 **원본을 저장하지 않는다** (아래 참고).
+ *
+ * 둘 다 완벽하지 않지만 비용 폭주를 막는 데는 충분하다. 정확한 과금이
+ * 필요해지면 그때 로그인을 붙이는 것이 순서다. */
+const QUOTA_PER_DAY = Number(process.env.VTON_QUOTA_PER_DAY || 5);
+const QUOTA_PER_IP_DAY = Number(process.env.VTON_QUOTA_PER_IP_DAY || 20);
+
+/* IP 는 그 자체로 개인정보다. 남용을 막는 데는 "같은 곳인가"만 알면 되므로
+ * 원본 대신 해시를 센다. 소금은 매일 바뀌므로 어제의 해시는 오늘 아무 의미가
+ * 없다 — 기록이 쌓여 추적 수단이 되는 것을 구조적으로 막는다. */
+import { createHash, randomBytes } from 'node:crypto';
+let saltDay = '', salt = randomBytes(16);
+function dayKey() {
+  const d = new Date();
+  return d.getUTCFullYear() + '-' + (d.getUTCMonth() + 1) + '-' + d.getUTCDate();
+}
+function anon(v) {
+  const day = dayKey();
+  if (day !== saltDay) { saltDay = day; salt = randomBytes(16); counters.clear(); }
+  return createHash('sha256').update(salt).update(String(v || '')).digest('hex').slice(0, 24);
+}
+/** 하루치만 메모리에 둔다. 날이 바뀌면 통째로 비운다 — 보관하지 않는다. */
+const counters = new Map();
+function take(kind, key, limit) {
+  const k = kind + ':' + key;
+  const used = counters.get(k) || 0;
+  if (used >= limit) return { ok: false, used, limit };
+  counters.set(k, used + 1);
+  return { ok: true, used: used + 1, limit };
+}
+function peek(kind, key, limit) {
+  return { used: counters.get(kind + ':' + key) || 0, limit };
+}
+function clientIP(req) {
+  const f = req.headers['x-forwarded-for'];
+  if (f) return String(f).split(',')[0].trim();
+  return req.socket.remoteAddress || '';
+}
+
 /* ── multipart/form-data 파싱 ────────────────────────────────────────────
  * 의존성을 넣지 않기 위해 직접 읽는다. 우리가 보내는 형태만 다루면 되므로
  * 완전한 구현일 필요가 없다 — 대신 그 사실을 여기 적어 둔다. */
@@ -148,7 +193,10 @@ const providers = {
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', ALLOW_ORIGIN);
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  /* X-Client-Id 를 빼먹으면 브라우저가 프리플라이트에서 막는다. 커스텀
+   * 헤더 하나가 요청을 preflight 대상으로 만든다는 것을 잊기 쉽다. */
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Client-Id');
+  res.setHeader('Access-Control-Max-Age', '600');
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
 }
 function json(res, code, obj) {
@@ -160,12 +208,15 @@ function json(res, code, obj) {
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') { cors(res); res.writeHead(204); return res.end(); }
 
-  if (req.url === '/health') {
+  if (req.url && req.url.split('?')[0] === '/health') {
+    const cid = req.headers['x-client-id'] || '';
+    const q = peek('cid', anon(cid), QUOTA_PER_DAY);
     return json(res, 200, {
       ok: true, provider: PROVIDER,
       keySet: !!API_KEY, modelSet: !!MODEL,
+      quota: { perDay: QUOTA_PER_DAY, used: q.used, left: Math.max(0, QUOTA_PER_DAY - q.used) },
       // 키 자체는 절대 돌려주지 않는다. 설정됐는지만 알려준다.
-      ko: API_KEY ? '준비됨' : 'VTON_API_KEY 가 설정되지 않았습니다.'
+      ko: API_KEY || PROVIDER === 'custom' ? '준비됨' : 'VTON_API_KEY 가 설정되지 않았습니다.'
     });
   }
 
@@ -174,6 +225,22 @@ const server = http.createServer(async (req, res) => {
   }
   if (!API_KEY && PROVIDER !== 'custom') {
     return json(res, 500, { ok: false, ko: 'VTON_API_KEY 가 설정되지 않았습니다.' });
+  }
+
+  /* 한도는 **공급자를 부르기 전에** 본다. 부르고 나서 막으면 돈은 이미 나갔다. */
+  const cidHash = anon(req.headers['x-client-id'] || '');
+  const ipHash = anon(clientIP(req));
+  const qIp = take('ip', ipHash, QUOTA_PER_IP_DAY);
+  if (!qIp.ok) {
+    return json(res, 429, { ok: false, quotaExceeded: true,
+      ko: '이 네트워크에서 오늘 사용할 수 있는 횟수를 모두 썼습니다. 내일 다시 시도해 주세요.' });
+  }
+  const q = take('cid', cidHash, QUOTA_PER_DAY);
+  if (!q.ok) {
+    return json(res, 429, { ok: false, quotaExceeded: true,
+      quota: { perDay: QUOTA_PER_DAY, used: q.used, left: 0 },
+      ko: '오늘 사용할 수 있는 ' + QUOTA_PER_DAY + '벌을 모두 썼습니다. 내일 다시 시도해 주세요. ' +
+          '내장 엔진 합성은 횟수 제한 없이 계속 쓰실 수 있습니다.' });
   }
 
   const ct = req.headers['content-type'] || '';
@@ -218,16 +285,22 @@ const server = http.createServer(async (req, res) => {
       current = await impl(current, g ? g.data : null, job);
     }
   } catch (e) {
+    /* 실패한 호출로 사용자의 횟수를 깎지 않는다. 우리 쪽 사정으로 실패했는데
+     * 남은 횟수가 줄어드는 것은 사용자에게 설명할 수 없다. */
+    counters.set('cid:' + cidHash, Math.max(0, (counters.get('cid:' + cidHash) || 1) - 1));
+    counters.set('ip:' + ipHash, Math.max(0, (counters.get('ip:' + ipHash) || 1) - 1));
     return json(res, 502, { ok: false, ko: String(e.message || e) });
   }
 
   return json(res, 200, {
     ok: true, provider: PROVIDER, ms: Date.now() - t0,
+    quota: { perDay: QUOTA_PER_DAY, used: q.used, left: Math.max(0, QUOTA_PER_DAY - q.used) },
     image: 'data:image/png;base64,' + current.toString('base64')
   });
 });
 
 server.listen(PORT, () => {
   console.log(`vton-proxy  http://localhost:${PORT}  provider=${PROVIDER}` +
-    (API_KEY ? '' : '  ⚠ VTON_API_KEY 미설정'));
+    `  한도 ${QUOTA_PER_DAY}벌/일 (IP ${QUOTA_PER_IP_DAY})` +
+    (API_KEY || PROVIDER === 'custom' ? '' : '  ⚠ VTON_API_KEY 미설정'));
 });

@@ -38,7 +38,9 @@ check(!plain.includes('global.VTON'), '원본에는 VTON 모듈 없음');
 /* ── 2. 가짜 공급자 ────────────────────────────────────────────────────
  * 받은 인물 이미지를 그대로 돌려주되, 무엇을 받았는지 기록한다. */
 const seen = [];
+let stubFail = false;
 const stub = http.createServer(async (req, res) => {
+  if (stubFail) { res.writeHead(500); return res.end('stub failure'); }
   const chunks = [];
   for await (const c of req) chunks.push(c);
   const buf = Buffer.concat(chunks);
@@ -138,6 +140,68 @@ check(seen.length >= 2, '옷 벌수만큼 호출됨', seen.length + '회');
 check(seen.every((s) => s.hasPerson), '매 호출에 인물 포함');
 check(seen.every((s) => s.hasGarment), '매 호출에 옷 포함');
 seen.forEach((s, i) => console.log('    ' + (i + 1) + '회차 ' + (s.bytes / 1024).toFixed(0) + 'KB'));
+
+/* ── 5. 한도 ────────────────────────────────────────────────────────────
+ * 장당 과금이므로 상한이 실제로 걸리는지가 비용의 전부다.
+ * 테스트하지 않은 한도는 한도가 아니다. */
+console.log('\n■ 사용 한도');
+const q = await page.evaluate(async ({ fx, url }) => {
+  const cv = new Function(fx + '; return person;')()().canvas;
+  const body = TRYON.prepare(BODY.analyzeFull(cv, { gender: 'male' }), cv, 760);
+  VTON.setEndpoint(url); VTON.setConsent(true);
+  const seq = [];
+  // 캐시에 걸리면 서버로 가지 않으므로 매번 다른 옷 조합으로 부른다
+  const sets = [
+    [{ garmentId: 't-crew-cotton', colorHex: '#111111' }],
+    [{ garmentId: 't-boxy-tee', colorHex: '#222222' }],
+    [{ garmentId: 't-open-collar', colorHex: '#333333' }],
+    [{ garmentId: 't-henley', colorHex: '#444444' }],
+    [{ garmentId: 't-summer-knit', colorHex: '#555555' }],
+    [{ garmentId: 't-pique-half-zip', colorHex: '#666666' }],
+    [{ garmentId: 'o-trench', colorHex: '#777777' }]
+  ];
+  await VTON.clearCache();
+  // 앞 단계에서 이미 몇 번 썼는지 서버에 물어보고 시작한다.
+  // 고정 숫자를 기대하면 테스트 순서가 바뀔 때 조용히 틀린다.
+  const start = (await VTON.ping()).quota;
+  for (const s of sets) {
+    const r = await VTON.compose(body, s, {});
+    seq.push({ ok: !!r.ok, quotaExceeded: !!r.quotaExceeded,
+               left: r.quota ? r.quota.left : null, ko: r.ko || null });
+  }
+  const h = await VTON.ping();
+  return { seq, health: h.quota || null, cid: VTON.clientId(), start };
+}, { fx, url: `http://127.0.0.1:${PORT_PROXY}` });
+
+const okCount = q.seq.filter((x) => x.ok).length;
+const blocked = q.seq.filter((x) => x.quotaExceeded).length;
+const expect = q.start.left;
+check(okCount === expect, '남은 횟수만큼만 성공',
+  '남은 ' + expect + ' → ' + okCount + '벌 성공 (한도 ' + q.start.perDay + '/일)');
+check(blocked === q.seq.length - expect, '한도 초과분은 전부 차단', blocked + '건 차단');
+check(q.seq[expect - 1].left === 0, '마지막 성공에서 남은 횟수 0', String(q.seq[expect - 1].left));
+check(/내장 엔진/.test(q.seq[5].ko || ''), '차단 안내가 대안을 알려줌');
+check(q.health && q.health.left === 0, '/health 도 소진 상태를 보고');
+check(!!q.cid && q.cid !== 'anon', '클라이언트 ID 발급됨');
+console.log('    응답: ' + q.seq.map((x) => x.ok ? ('ok(' + x.left + ')') : '막힘').join(' '));
+
+/* ── 6. 실패는 횟수를 깎지 않는다 ─────────────────────────────────────── */
+console.log('\n■ 실패했을 때');
+stubFail = true;
+const before = (await (await fetch(`http://127.0.0.1:${PORT_PROXY}/health`,
+  { headers: { 'X-Client-Id': 'quota-test-2' } })).json()).quota;
+const fd = new FormData();
+fd.append('person', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'p.png');
+fd.append('garment0', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'g.png');
+fd.append('jobs', JSON.stringify([{ index: 0, category: 'top' }]));
+const failRes = await fetch(`http://127.0.0.1:${PORT_PROXY}/compose`,
+  { method: 'POST', body: fd, headers: { 'X-Client-Id': 'quota-test-2' } });
+const after = (await (await fetch(`http://127.0.0.1:${PORT_PROXY}/health`,
+  { headers: { 'X-Client-Id': 'quota-test-2' } })).json()).quota;
+stubFail = false;
+check(failRes.status === 502, '공급자 실패는 502', String(failRes.status));
+check(before.left === after.left, '실패해도 남은 횟수가 줄지 않음',
+  before.left + ' → ' + after.left);
 
 console.log('\npage errors: ' + (errs.length ? errs.join(' | ') : 'none'));
 await browser.close();
